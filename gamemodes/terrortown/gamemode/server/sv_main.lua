@@ -823,7 +823,7 @@ local function NameChangeKick()
 		local msg = "Changed name during a round"
 
 		if t > 0 then
-			ply:KickBan(t, msg)
+			ply:Kick(msg)
 		else
 			ply:Kick(msg)
 		end
