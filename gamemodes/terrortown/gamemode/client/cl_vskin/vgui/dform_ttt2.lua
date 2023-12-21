@@ -123,6 +123,71 @@ local function MakeReset(parent)
 end
 
 ---
+-- Adds a textentry to the form
+-- @param table data The data for the textentry
+-- @note Structure of data = {
+-- label, default, convar, serverConVar, initial, function OnChange(value),
+-- master = { function AddSlave(self, slave) }
+-- }
+-- @return Panel The created textentry
+-- @realm client
+function PANEL:MakeTextEntry(data)
+	local left = vgui.Create("DLabelTTT2", self)
+
+	left:SetText(data.label)
+
+	left.Paint = function(slf, w, h)
+		derma.SkinHook("Paint", "FormLabelTTT2", slf, w, h)
+
+		return true
+	end
+
+	local right = vgui.Create("DTextEntryTTT2", self)
+
+	local reset = MakeReset(self)
+	right:SetResetButton(reset)
+
+	right:SetUpdateOnType(false)
+	right:SetHeightMult(1)
+
+	right.OnGetFocus = function(slf)
+		util.getHighestPanelParent(self):SetKeyboardInputEnabled(true)
+	end
+
+	right.OnLoseFocus = function(slf)
+		util.getHighestPanelParent(self):SetKeyboardInputEnabled(false)
+	end
+
+	-- Set default if possible even if the convar could still overwrite it
+	right:SetDefaultValue(data.default)
+	right:SetConVar(data.convar)
+	right:SetServerConVar(data.serverConvar)
+
+	if not data.convar and not data.serverConvar and data.initial then
+		right:SetValue(data.initial)
+	end
+
+	right.OnValueChanged = function(slf, value)
+		if isfunction(data.OnChange) then
+			data.OnChange(slf, value)
+		end
+	end
+
+	right:SetTall(32)
+	right:Dock(TOP)
+
+	self:AddItem(left, right, reset)
+
+	if IsValid(data.master) and isfunction(data.master.AddSlave) then
+		data.master:AddSlave(left)
+		data.master:AddSlave(right)
+		data.master:AddSlave(reset)
+	end
+
+	return left, right
+end
+
+---
 -- Adds a checkbox to the form
 -- @param table data The data for the checkbox
 -- @return Panel The created checkbox
@@ -130,32 +195,29 @@ end
 function PANEL:MakeCheckBox(data)
 	local left = vgui.Create("DCheckBoxLabelTTT2", self)
 
+	local reset = MakeReset(self)
+	left:SetResetButton(reset)
+
 	left:SetText(data.label)
+	left:SetTextParams(data.params)
+	left:SetInverted(data.invert)
+
+	-- Set default if possible even if the convar could still overwrite it
+	left:SetDefaultValue(data.default)
 	left:SetConVar(data.convar)
+	left:SetServerConVar(data.serverConvar)
+	left:SetDatabase(data.database)
 
 	left:SetTall(32)
 
-	left:SetValue(data.initial)
+	if not data.convar and not data.serverConvar and not data.database and data.initial then
+		left:SetValue(data.initial)
+	end
 
-	left.OnChange = function(slf, value)
+	left.OnValueChanged = function(slf, value)
 		if isfunction(data.OnChange) then
 			data.OnChange(slf, value)
 		end
-	end
-
-	local reset = MakeReset(self)
-
-	if ConVarExists(data.convar or "") or data.default ~= nil then
-		reset.DoClick = function(slf)
-			local default = data.default
-			if default == nil then
-				default = tobool(GetConVar(data.convar):GetDefault())
-			end
-
-			left:SetValue(default)
-		end
-	else
-		reset.noDefault = true
 	end
 
 	self:AddItem(left, nil, reset)
@@ -186,16 +248,25 @@ function PANEL:MakeSlider(data)
 
 	local right = vgui.Create("DNumSliderTTT2", self)
 
+	local reset = MakeReset(self)
+	right:SetResetButton(reset)
+
 	right:SetMinMax(data.min, data.max)
 
 	if data.decimal ~= nil then
 		right:SetDecimals(data.decimal)
 	end
 
+	-- Set default if possible even if the convar could still overwrite it
+	right:SetDefaultValue(data.default)
 	right:SetConVar(data.convar)
+	right:SetServerConVar(data.serverConvar)
+	right:SetDatabase(data.database)
 	right:SizeToContents()
 
-	right:SetValue(data.initial)
+	if not data.convar and not data.serverConvar and not data.database and data.initial then
+		right:SetValue(data.initial)
+	end
 
 	right.OnValueChanged = function(slf, value)
 		if isfunction(data.OnChange) then
@@ -205,21 +276,6 @@ function PANEL:MakeSlider(data)
 
 	right:SetTall(32)
 	right:Dock(TOP)
-
-	local reset = MakeReset(self)
-
-	if ConVarExists(data.convar or "") or data.default ~= nil then
-		reset.DoClick = function(slf)
-			local default = data.default
-			if default == nil then
-				default = tonumber(GetConVar(data.convar):GetDefault())
-			end
-
-			right:SetValue(default)
-		end
-	else
-		reset.noDefault = true
-	end
 
 	self:AddItem(left, right, reset)
 
@@ -235,6 +291,12 @@ end
 ---
 -- Adds a combobox to the form
 -- @param table data The data for the combobox
+-- @note Structure of data = {
+-- label, default, choices = { [1] = {title, value, select, icon, additionalData}, [2] = ...},
+-- conVar, serverConVar, selectId or selectTitle or selectValue,
+-- function OnChange(value, additionalData, dropDownPanel), master = { function AddSlave(self, slave) }
+-- }
+-- @note If ConVars are used the values are always strings, so make sure, that you used strings for values, when setting up choices
 -- @return Panel The created combobox
 -- @return Panel The created label
 -- @realm client
@@ -251,50 +313,50 @@ function PANEL:MakeComboBox(data)
 
 	local right = vgui.Create("DComboBoxTTT2", self)
 
+	local reset = MakeReset(self)
+	right:SetResetButton(reset)
+	right:SetDefaultValue(data.default) -- Set default if possible even if the convar could still overwrite it
+
 	if data.choices then
 		for i = 1, #data.choices do
-			right:AddChoice(data.choices[i])
-		end
-	end
+			local choice = data.choices[i]
 
-	if data.selectId then
-		right:ChooseOptionId(data.selectId)
-	elseif data.selectName then
-		right:ChooseOptionName(data.selectName)
-	end
-
-	right.OnSelect = function(slf, index, value, rawdata)
-		if slf.m_strConVar then
-			RunConsoleCommand(slf.m_strConVar, tostring(rawdata or value))
-		end
-
-		-- run the callback function in the next frame since it takes
-		-- one frame to update the convar if one is set.
-		timer.Simple(0, function()
-			if data and isfunction(data.OnChange) then
-				data.OnChange(slf, index, value, rawdata)
+			if istable(choice) then
+				right:AddChoice(choice.title, choice.value, choice.select, choice.icon, choice.data)
+			else
+				-- Support old simple structure
+				right:AddChoice(choice, choice)
 			end
-		end)
+		end
 	end
 
-	right:SetConVar(data.convar)
+	local conVar = data.convar or data.conVar
+	right:SetConVar(conVar)
+
+	local serverConVar = data.serverConvar or data.serverConVar
+	right:SetServerConVar(serverConVar)
+
+	right:SetDatabase(data.database)
+
+	-- Only choose an option, if no conVars are set
+	if not isstring(conVar) and not isstring(serverConVar) and not istable(data.database) then
+		if data.selectId then
+			right:ChooseOptionId(data.selectId, true)
+		elseif data.selectName or data.selectTitle then
+			right:ChooseOptionName(data.selectName or data.selectTitle, true)
+		elseif data.selectValue then
+			right:ChooseOptionValue(data.selectValue, true)
+		end
+	end
+
+	right.OnSelect = function(slf, index, value, additionalData)
+		if data and isfunction(data.OnChange) then
+			data.OnChange(value, additionalData, slf)
+		end
+	end
+
 	right:SetTall(32)
 	right:Dock(TOP)
-
-	local reset = MakeReset(self)
-
-	if ConVarExists(data.convar or "") or data.default ~= nil then
-		reset.DoClick = function(slf)
-			local default = data.default
-			if default == nil then
-				default = GetConVar(data.convar):GetDefault()
-			end
-
-			right:ChooseOptionName(default)
-		end
-	else
-		reset.noDefault = true
-	end
 
 	self:AddItem(left, right, reset)
 
@@ -375,7 +437,7 @@ function PANEL:MakeHelp(data)
 	local left = vgui.Create("DLabelTTT2", self)
 
 	left:SetText(data.label)
-	left:SetParams(data.params)
+	left:SetTextParams(data.params)
 	left:SetContentAlignment(7)
 	left:SetAutoStretchVertical(true)
 
@@ -390,7 +452,7 @@ function PANEL:MakeHelp(data)
 
 	-- make sure the height is based on the amount of text inside
 	left.PerformLayout = function(slf, w, h)
-		local textTranslated = LANG.GetParamTranslation(slf:GetText(), slf:GetParams())
+		local textTranslated = LANG.GetParamTranslation(slf:GetText(), LANG.TryTranslation(slf:GetTextParams()))
 
 		local textWrapped = draw.GetWrappedText(
 			textTranslated,
@@ -461,7 +523,7 @@ function PANEL:MakeColorMixer(data)
 		end
 
 		-- update colormixer as well
-		colorMixer:SetDisabled(not enabled)
+		colorMixer:SetEnabled(enabled)
 	end
 
 	self:AddItem(left, right)
@@ -472,6 +534,88 @@ function PANEL:MakeColorMixer(data)
 	end
 
 	return right, left
+end
+
+-- Adds a panel to the form
+-- @return Panel The created panel
+-- @realm client
+function PANEL:MakePanel()
+	local panel = vgui.Create("DPanelTTT2", self)
+
+	self:AddItem(panel)
+
+	return panel
+end
+
+---
+-- Adds a new card to the form.
+-- @param table data The data for the card
+-- @param PANEL base The base Panel (DIconLayout) where this card will be added
+-- @return Panel The created card
+-- @realm client
+function PANEL:MakeCard(data, base)
+	local card = base:Add("DCardTTT2")
+
+	card:SetSize(238, 78)
+	card:SetIcon(data.icon)
+	card:SetText(data.label)
+	card:SetMode(data.initial)
+
+	card.OnModeChanged = function(slf, oldMode, newMode)
+		if data and isfunction(data.OnChange) then
+			data.OnChange(slf, oldMode, newMode)
+		end
+	end
+
+	return card
+end
+
+---
+-- Adds a new image check box to the form.
+-- @param table data The data for the image check box
+-- @param PANEL base The base Panel (DIconLayout) where this image check box will be added
+-- @return Panel The created image check box
+-- @realm client
+function PANEL:MakeImageCheckBox(data, base)
+	local box = base:Add("DImageCheckBoxTTT2")
+
+	box:SetSize(238, 175)
+	box:SetModel(data.model)
+	box:SetHeadBox(data.headbox or false)
+	box:SetText(data.label)
+
+	if isfunction(data.OnModelSelected) then
+		box.OnModelSelected = function(slf, userTriggered, state)
+			if not userTriggered then return end
+
+			data.OnModelSelected(slf, state)
+		end
+	end
+
+	if isfunction(data.OnModelHattable) then
+		box.OnModelHattable = function(slf, userTriggered, state)
+			if not userTriggered then return end
+
+			data.OnModelHattable(slf, state)
+		end
+	end
+
+	return box
+end
+
+-- Adds an icon layout to the form
+-- @param[default=10] number spacing The spacing between the elements
+-- @return Panel The created panel
+-- @realm client
+function PANEL:MakeIconLayout(spacing)
+	local panel = vgui.Create("DIconLayout", self)
+
+	panel:SetSpaceY(spacing or 10)
+	panel:SetSpaceX(spacing or 10)
+
+	self:AddItem(panel)
+
+	return panel
 end
 
 derma.DefineControl("DFormTTT2", "", PANEL, "DCollapsibleCategoryTTT2")
@@ -486,7 +630,7 @@ derma.DefineControl("DFormTTT2", "", PANEL, "DCollapsibleCategoryTTT2")
 -- @return Panel The created collapsable form
 -- @realm client
 function vgui.CreateTTT2Form(parent, name)
-	local form = vgui.Create("DFormTTT2", parent)
+	local form = vgui.Create("DFormTTT2", parent, name)
 
 	form:SetName(name)
 	form:Dock(TOP)

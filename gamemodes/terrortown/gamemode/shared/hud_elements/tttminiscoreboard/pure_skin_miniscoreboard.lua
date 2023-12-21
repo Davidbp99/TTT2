@@ -23,7 +23,7 @@ local const_defaults = {
 	minsize = {w = 0, h = 0}
 }
 
-local plysList = plysList or {}
+local plysList = {}
 
 local function SortMiniscoreboardFunc(a, b)
 	if not a:OnceFound() then
@@ -179,10 +179,12 @@ function HUDELEMENT:Draw()
 		surface.SetDrawColor(clr(ply_color))
 		surface.DrawRect(tmp_x, tmp_y, self.ply_ind_size, self.ply_ind_size)
 
-		if ply:WasRevivedAndConfirmed() then
-			draw.FilteredTexture(tmp_x + 3, tmp_y + 3, self.ply_ind_size - 6, self.ply_ind_size - 6, self.icon_revived, 180, COLOR_BLACK)
-		elseif ply:OnceFound() and not ply:RoleKnown() then -- draw marker on indirect confirmed bodies
-			draw.FilteredTexture(tmp_x + 3, tmp_y + 3, self.ply_ind_size - 6, self.ply_ind_size - 6, self.icon_in_conf, 120, COLOR_BLACK)
+		if IsValid(ply) then
+			if ply:WasRevivedAndConfirmed() then
+				draw.FilteredTexture(tmp_x + 3, tmp_y + 3, self.ply_ind_size - 6, self.ply_ind_size - 6, self.icon_revived, 180, COLOR_BLACK)
+			elseif ply:OnceFound() and not ply:RoleKnown() then -- draw marker on indirect confirmed bodies
+				draw.FilteredTexture(tmp_x + 3, tmp_y + 3, self.ply_ind_size - 6, self.ply_ind_size - 6, self.icon_in_conf, 120, COLOR_BLACK)
+			end
 		end
 
 		-- draw lines around the element
@@ -193,4 +195,15 @@ function HUDELEMENT:Draw()
 	if not self:InheritParentBorder() then
 		self:DrawLines(self.pos.x, self.pos.y, self.size.w, self.size.h, self.basecolor.a)
 	end
+end
+
+---
+-- This hook is used to modify the color of the dot seen in the miniscoreboard.
+-- @param Player ply The player whose dot color should be changed
+-- @param Color col The originally intended color
+-- @return nil|Color The new color for the dot
+-- @hook
+-- @realm client
+function GM:TTT2ModifyMiniscoreboardColor(ply, col)
+
 end

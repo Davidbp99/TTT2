@@ -1,6 +1,6 @@
 ---
 -- Traitor equipment menu
--- @section stop_manager
+-- @section shop
 
 local GetTranslation = LANG.GetTranslation
 local GetPTranslation = LANG.GetParamTranslation
@@ -51,8 +51,71 @@ local serverColsVar = GetConVar("ttt_bem_sv_cols")
 local serverRowsVar = GetConVar("ttt_bem_sv_rows")
 local serverSizeVar = GetConVar("ttt_bem_sv_size")
 
--- add favorites DB functions
-include("favorites_db.lua")
+---
+-- Some database functions of the shop
+
+---
+-- Creates the fav table if it not already exists
+-- @realm client
+local function CreateFavTable()
+	if not sql.TableExists("ttt_bem_fav") then
+		local query = "CREATE TABLE ttt_bem_fav (guid TEXT, role TEXT, weapon_id TEXT)"
+		sql.Query(query)
+	end
+end
+
+---
+-- Adds a @{WEAPON} or an @{ITEM} into the fav table
+-- @param number steamid steamid of the @{Player}
+-- @param number subrole subrole id
+-- @param string id the @{WEAPON} or @{ITEM} id
+-- @realm client
+local function AddFavorite(steamid, subrole, id)
+	local query = ("INSERT INTO ttt_bem_fav VALUES('" .. steamid .. "','" .. subrole .. "','" .. id .. "')")
+	sql.Query(query)
+end
+
+---
+-- Removes a @{WEAPON} or an @{ITEM} into the fav table
+-- @param number steamid steamid of the @{Player}
+-- @param number subrole subrole id
+-- @param string id the @{WEAPON} or @{ITEM} id
+-- @realm client
+local function RemoveFavorite(steamid, subrole, id)
+	local query = ("DELETE FROM ttt_bem_fav WHERE guid = '" .. steamid .. "' AND role = '" .. subrole .. "' AND weapon_id = '" .. id .. "'")
+	sql.Query(query)
+end
+
+---
+-- Get all favorites of a @{Player} based on the subrole
+-- @param number steamid steamid of the @{Player}
+-- @param number subrole subrole id
+-- @return table list of all favorites based on the subrole
+-- @realm client
+local function GetFavorites(steamid, subrole)
+	local query = ("SELECT weapon_id FROM ttt_bem_fav WHERE guid = '" .. steamid .. "' AND role = '" .. subrole .. "'")
+
+	return sql.Query(query)
+end
+
+---
+-- Looks for weapon id in favorites table (result of GetFavorites)
+-- @param table favorites favorites table
+-- @param number id id of the @{WEAPON} or @{ITEM}
+-- @return boolean
+-- @realm client
+local function IsFavorite(favorites, id)
+	for _, value in pairs(favorites) do
+		local dbid = value["weapon_id"]
+
+		if dbid == tostring(id) then
+			return true
+		end
+	end
+
+	return false
+end
+
 
 local color_bad = Color(244, 67, 54, 255)
 --local color_good = Color(76, 175, 80, 255)
@@ -63,9 +126,9 @@ local fallback_mat = Material("vgui/ttt/missing_equip_icon")
 -- Buyable weapons are loaded automatically. Buyable items are defined in
 -- equip_items_shd.lua
 
-local eqframe = eqframe
-local dlist = dlist
-local curSearch = curSearch
+local eqframe = nil
+local dlist = nil
+local curSearch = nil
 
 --
 --     GENERAL HELPER FUNCTIONS
@@ -277,6 +340,7 @@ local function CreateEquipmentList(t)
 
 	-- icon size = 64 x 64
 	if IsValid(dlist) then
+		---@cast dlist -nil
 		dlist:Clear()
 	else
 		TraitorMenuPopup()
@@ -345,17 +409,18 @@ local function CreateEquipmentList(t)
 			local ic = nil
 
 			-- Create icon panel
-			if item.ttt2_cached_material then
+			if item.iconMaterial then
 				ic = vgui.Create("LayeredIcon", dlist)
 
-				if item.custom and showCustomVar:GetBool() then
+				if item.builtin and showCustomVar:GetBool() then
 					-- Custom marker icon
 					local marker = vgui.Create("DImage")
-					marker:SetImage("vgui/ttt/custom_marker")
+					marker:SetImage("vgui/ttt/vskin/markers/builtin")
+					marker:SetImageColor(col)
 
 					marker.PerformLayout = PerformMarkerLayout
 
-					marker:SetTooltip(GetTranslation("equip_custom"))
+					marker:SetTooltip(GetTranslation("builtin_marker"))
 
 					ic:AddLayer(marker)
 					ic:EnableMousePassthrough(marker)
@@ -386,7 +451,7 @@ local function CreateEquipmentList(t)
 				if ItemIsWeapon(item) and showSlotVar:GetBool() then
 					local slot = vgui.Create("SimpleIconLabelled")
 					slot:SetIcon("vgui/ttt/slotcap")
-					slot:SetIconColor(col or COLOR_GREY)
+					slot:SetIconColor(col or COLOR_LGRAY)
 					slot:SetIconSize(16)
 					slot:SetIconText(MakeKindValid(item.Kind))
 					slot:SetIconProperties(COLOR_WHITE,
@@ -400,10 +465,10 @@ local function CreateEquipmentList(t)
 				end
 
 				ic:SetIconSize(itemSize or 64)
-				ic:SetMaterial(item.ttt2_cached_material)
-			elseif item.ttt2_cached_model then
+				ic:SetMaterial(item.iconMaterial)
+			elseif item.itemModel then
 				ic = vgui.Create("SpawnIcon", dlist)
-				ic:SetModel(item.ttt2_cached_model)
+				ic:SetModel(item.itemModel)
 			else
 				print("Equipment item does not have model or material specified: " .. tostring(item) .. "\n")
 
@@ -443,6 +508,7 @@ local function CreateEquipmentList(t)
 				net.WriteString(self.item.id)
 				net.SendToServer()
 
+				---@cast eqframe -nil
 				eqframe:Close()
 			end
 		end
@@ -527,7 +593,8 @@ function TraitorMenuPopup()
 	local h = dlisth + 75
 
 	-- Close shop if player clicks button again
-	if eqframe and IsValid(eqframe) then
+	if IsValid(eqframe) then
+		---@cast eqframe -nil
 		eqframe:Close()
 
 		return
@@ -539,7 +606,8 @@ function TraitorMenuPopup()
 	end
 
 	-- Close any existing traitor menu
-	if eqframe and IsValid(eqframe) then
+	if IsValid(eqframe) then
+		---@cast eqframe -nil
 		eqframe:Close()
 	end
 
@@ -626,7 +694,7 @@ function TraitorMenuPopup()
 	local dconfirm = vgui.Create("DButton", dbtnpnl)
 	dconfirm:SetPos(m, m)
 	dconfirm:SetSize(bw, bh)
-	dconfirm:SetDisabled(true)
+	dconfirm:SetEnabled(false)
 	dconfirm:SetText(GetTranslation("equip_confirm"))
 
 	--add a favorite button
@@ -634,7 +702,7 @@ function TraitorMenuPopup()
 	dfav:CopyPos(dconfirm)
 	dfav:MoveRightOf(dconfirm)
 	dfav:SetSize(bh, bh)
-	dfav:SetDisabled(false)
+	dfav:SetEnabled(true)
 	dfav:SetText("")
 	dfav:SetImage("icon16/star.png")
 
@@ -642,7 +710,7 @@ function TraitorMenuPopup()
 	local dcancel = vgui.Create("DButton", dframe)
 	dcancel:SetPos(w - m * 3 - bw, h - bh - m * 3)
 	dcancel:SetSize(bw, bh)
-	dcancel:SetDisabled(false)
+	dcancel:SetEnabled(true)
 	dcancel:SetText(GetTranslation("close"))
 
 	local _, bpy = dbtnpnl:GetPos()
@@ -811,7 +879,7 @@ function TraitorMenuPopup()
 		-- Easy accessable var for double-click buying
 		new.item.disabledBuy = not can_order
 
-		dconfirm:SetDisabled(not can_order)
+		dconfirm:SetEnabled(can_order)
 	end
 
 	-- select first
@@ -841,7 +909,7 @@ function TraitorMenuPopup()
 
 		dlist.SelectedPanel.item.disabledBuy = not can_order
 
-		dconfirm:SetDisabled(not can_order)
+		dconfirm:SetEnabled(can_order)
 	end
 
 	dcancel.DoClick = function()
@@ -883,6 +951,7 @@ concommand.Add("ttt_cl_traitorpopup", TraitorMenuPopup)
 
 local function ForceCloseTraitorMenu(ply, cmd, args)
 	if IsValid(eqframe) then
+		---@cast eqframe -nil
 		eqframe:Close()
 	end
 end
@@ -1032,12 +1101,38 @@ function GM:OnContextMenuOpen()
 
 	---
 	-- @realm client
-	if hook.Run("TTT2PreventAccessShop", client) then return end
+	if hook.Run("TTT2PreventAccessShop", LocalPlayer()) then return end
 
 	if IsValid(eqframe) then
+		---@cast eqframe -nil
 		eqframe:Close()
 	else
 		RunConsoleCommand("ttt_cl_traitorpopup")
+	end
+end
+
+---
+-- Caches the material or model
+-- @param table item
+-- @realm client
+function TTT2CacheEquipMaterials(item)
+	item.isValidEquipment = true
+
+	if item.material then
+		item.iconMaterial = Material(item.material)
+
+		if item.iconMaterial:IsError() then
+			-- setting fallback error material
+			item.iconMaterial = fallback_mat
+		end
+	elseif item.model then
+		-- do not use fallback mat and use model instead
+		item.itemModel = item.model
+	end
+
+	--if there is no sensible material and model, the item should probably not be editable in the equipment Editor
+	if item.material == "vgui/ttt/icon_id" and item.model == "models/weapons/w_bugbait.mdl" then
+		item.isValidEquipment = false
 	end
 end
 
@@ -1046,18 +1141,7 @@ hook.Add("PostInitPostEntity", "TTT2CacheEquipMaterials", function()
 	local itms = ShopEditor.GetEquipmentForRoleAll()
 
 	for _, item in pairs(itms) do
-		--if there is no material or model, the item should probably not be available in the shop
-		if item.material and item.material ~= "vgui/ttt/icon_id" then
-			item.ttt2_cached_material = Material(item.material)
-			if item.ttt2_cached_material:IsError() then
-				-- Setting fallback material
-				item.ttt2_cached_material = fallback_mat
-			end
-		elseif item.model and item.model ~= "models/weapons/w_bugbait.mdl" then
-			--do not use fallback mat and use model instead
-			item.ttt2_cached_material = nil
-			item.ttt2_cached_model = model
-		end
+		TTT2CacheEquipMaterials(item)
 	end
 end)
 
@@ -1065,6 +1149,7 @@ end)
 hook.Add("TTTBeginRound", "TTTBEMCleanUp", function()
 	if not IsValid(eqframe) then return end
 
+	---@cast eqframe -nil
 	eqframe:Close()
 end)
 
@@ -1072,12 +1157,14 @@ end)
 hook.Add("TTTEndRound", "TTTBEMCleanUp", function()
 	if not IsValid(eqframe) then return end
 
+	---@cast eqframe -nil
 	eqframe:Close()
 end)
 
 -- Search text field focus hooks
 local function getKeyboardFocus(pnl)
 	if IsValid(eqframe) and pnl:HasParent(eqframe) then
+		---@cast eqframe -nil
 		eqframe:SetKeyboardInputEnabled(true)
 	end
 
@@ -1090,6 +1177,39 @@ hook.Add("OnTextEntryGetFocus", "BEM_GetKeyboardFocus", getKeyboardFocus)
 local function loseKeyboardFocus(pnl)
 	if not IsValid(eqframe) or not pnl:HasParent(eqframe) then return end
 
+	---@cast eqframe -nil
 	eqframe:SetKeyboardInputEnabled(false)
 end
 hook.Add("OnTextEntryLoseFocus", "BEM_LoseKeyboardFocus", loseKeyboardFocus)
+
+---
+-- Called after TTT's settings window has been created. Used to add
+-- your own tab to the settings window.
+-- @param DPropertySheet dSheet The property sheet where contents can be added
+-- @hook
+-- @realm client
+function GM:TTTEquipmentTabs(dSheet)
+
+end
+
+---
+-- A clientside hook that is called on the client of the player
+-- that just bought an item. You probably don't want to use this as it
+-- is recommended to use @{ITEM:Bought}.
+-- @param boolean True if item, false if weapon
+-- @param string idOrCls The id of the @{ITEM} or @{Weapon}, old id for @{ITEM} and class for @{Weapon}
+-- @hook
+-- @realm client
+function GM:TTTBoughtItem(isItem, idOrCls)
+
+end
+
+---
+-- Cancelable hook to prevent the usage of the shop on the client.
+-- @param Player ply The player that tries to access the shop
+-- @return boolean Return true to prevent shop access
+-- @hook
+-- @realm client
+function GM:TTT2PreventAccessShop(ply)
+
+end

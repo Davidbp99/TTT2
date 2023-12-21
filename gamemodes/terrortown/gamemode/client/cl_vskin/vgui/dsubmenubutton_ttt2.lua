@@ -1,6 +1,6 @@
 ---
 -- @class PANEL
--- @section DSubMenuButtonTTT2
+-- @section DSubmenuButtonTTT2
 
 local PANEL = {}
 
@@ -28,7 +28,10 @@ function PANEL:Init()
 		title = "",
 		title_font = "DermaTTT2SubMenuButtonTitle",
 		icon = nil,
-		selected = false
+		iconFullSize = false,
+		iconBadge = nil,
+		iconBadgeSize = 0,
+		selected = false,
 	}
 end
 
@@ -37,6 +40,34 @@ end
 -- @realm client
 function PANEL:IsDown()
 	return self.Depressed
+end
+
+---
+-- @param Material badge
+-- @realm client
+function PANEL:SetIconBadge(badge)
+	self.contents.iconBadge = badge
+end
+
+---
+-- @return Material|nil
+-- @realm client
+function PANEL:GetIconBadge()
+	return self.contents.iconBadge
+end
+
+---
+-- @param number size
+-- @realm client
+function PANEL:SetIconBadgeSize(size)
+	self.contents.iconBadgeSize = size
+end
+
+---
+-- @return number
+-- @realm client
+function PANEL:GetIconBadgeSize()
+	return self.contents.iconBadgeSize
 end
 
 ---
@@ -69,9 +100,11 @@ end
 
 ---
 -- @param Material iconMat
+-- @param boolean iconFullSize
 -- @realm client
-function PANEL:SetIcon(iconMat)
+function PANEL:SetIcon(iconMat, iconFullSize)
 	self.contents.icon = iconMat
+	self.contents.iconFullSize = tobool(iconFullSize)
 end
 
 ---
@@ -89,7 +122,14 @@ function PANEL:HasIcon()
 end
 
 ---
--- @param boolean
+-- @return boolean
+-- @realm client
+function PANEL:IsIconFullSize()
+	return self.contents.iconFullSize
+end
+
+---
+-- @param boolean active
 -- @realm client
 function PANEL:SetActive(active)
 	self.contents.active = active == nil and true or active
@@ -134,4 +174,4 @@ function PANEL:SizeToContents()
 	self:SetSize(w + 8, h + 4)
 end
 
-derma.DefineControl("DSubMenuButtonTTT2", "A standard Button", PANEL, "DLabel")
+derma.DefineControl("DSubmenuButtonTTT2", "A standard Button", PANEL, "DLabel")

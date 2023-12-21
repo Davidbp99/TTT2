@@ -22,7 +22,7 @@ util.AddNetworkString("TTT2SetPlayerReady")
 util.AddNetworkString("TTT2SetRevivalReason")
 util.AddNetworkString("TTT2RevivalStopped")
 util.AddNetworkString("TTT2RevivalUpdate_IsReviving")
-util.AddNetworkString("TTT2RevivalUpdate_IsBlockingRevival")
+util.AddNetworkString("TTT2RevivalUpdate_RevivalBlockMode")
 util.AddNetworkString("TTT2RevivalUpdate_RevivalStartTime")
 util.AddNetworkString("TTT2RevivalUpdate_RevivalDuration")
 
@@ -141,7 +141,7 @@ function plymeta:SetDefaultCredits()
 	end
 
 	local rd = self:GetSubRoleData()
-	local name = rd.index == ROLE_TRAITOR and "ttt_credits_starting" or "ttt_" .. rd.abbr .. "_credits_starting"
+	local name = "ttt_" .. rd.abbr .. "_credits_starting"
 
 	if self:GetTeam() ~= TEAM_TRAITOR then
 		self:SetCredits(math.ceil(ConVarExists(name) and GetConVar(name):GetFloat() or 0))
@@ -150,11 +150,6 @@ function plymeta:SetDefaultCredits()
 	end
 
 	local c = ConVarExists(name) and GetConVar(name):GetFloat() or 0
-	local member_one = #roles.GetTeamMembers(TEAM_TRAITOR) == 1
-
-	if not rd.preventTraitorAloneCredits and member_one then
-		c = c + (ConVarExists("ttt_credits_alonebonus") and GetConVar("ttt_credits_alonebonus"):GetFloat() or 0)
-	end
 
 	---
 	-- @realm server
@@ -533,7 +528,7 @@ end
 
 ---
 -- Sends the last words based on the DamageInfo
--- @param DamageInfo dmginfo
+-- @param CTakeDamageInfo dmginfo
 -- @realm server
 function plymeta:SendLastWords(dmginfo)
 	-- Use a pseudo unique id to prevent people from abusing the concmd
@@ -598,12 +593,11 @@ function plymeta:ShouldSpawn()
 end
 
 ---
--- Preps a player for a new round, spawning them if they should
--- @param boolean dead_only If dead_only is
--- true, only spawns if player is dead, else just makes sure he is healed.
--- @return boolean
+-- Preps a player for a new round, spawning them if they should.
+-- @param boolean deadOnly If deadOnly is true, only spawns if player is dead, else just makes sure he is healed
+-- @return boolean Returns true if player is spawned
 -- @realm server
-function plymeta:SpawnForRound(dead_only)
+function plymeta:SpawnForRound(deadOnly)
 	---
 	-- @realm server
 	hook.Run("PlayerSetModel", self)
@@ -614,7 +608,7 @@ function plymeta:SpawnForRound(dead_only)
 
 	-- wrong alive status and not a willing spec who unforced after prep started
 	-- (and will therefore be "alive")
-	if dead_only and self:Alive() and not self:IsSpec() then
+	if deadOnly and self:Alive() and not self:IsSpec() then
 		-- if the player does not need respawn, make sure he has full health
 		self:SetHealth(self:GetMaxHealth())
 
@@ -636,6 +630,16 @@ function plymeta:SpawnForRound(dead_only)
 	self:StripAll()
 	self:SetTeam(TEAM_TERROR)
 	self:Spawn()
+
+	-- set spawn position
+	local spawnPoint = plyspawn.GetRandomSafePlayerSpawnPoint(self)
+
+	if not spawnPoint then
+		return false
+	end
+
+	self:SetPos(spawnPoint.pos)
+	self:SetAngles(spawnPoint.ang)
 
 	-- tell caller that we spawned
 	return true
@@ -660,14 +664,19 @@ function plymeta:InitialSpawn()
 
 	self:ResetStatus()
 
-	-- Always reset sprint
-	self.sprintProgress = 1
-
 	-- Start off with clean, full karma (unless it can and should be loaded)
 	self:InitKarma()
 
 	-- We never have weapons here, but this inits our equipment state
 	self:StripAll()
+
+	-- set spawn position
+	local spawnPoint = plyspawn.GetRandomSafePlayerSpawnPoint(self)
+
+	if not spawnPoint then return end
+
+	self:SetPos(spawnPoint.pos)
+	self:SetAngles(spawnPoint.ang)
 end
 
 ---
@@ -794,7 +803,7 @@ end
 -- @param[opt] function OnRevive The @{function} that should be run if the @{Player} revives
 -- @param[opt] function DoCheck An additional checking @{function}
 -- @param[default=false] boolean needsCorpse Whether the dead @{Player} @{CORPSE} is needed
--- @param[default=false] boolean blockRound Stops the round from ending if this is set to true until the player is alive again
+-- @param[default=REVIVAL_BLOCK_NONE] number blockRound Stops the round from ending if this is set to someting other than 0
 -- @param[opt] function OnFail This @{function} is called if the revive fails
 -- @param[opt] Vector spawnPos The position where the player should be spawned, accounts for minor obstacles
 -- @param[opt] Angle spawnEyeAngle The eye angles of the revived players
@@ -806,8 +815,20 @@ function plymeta:Revive(delay, OnRevive, DoCheck, needsCorpse, blockRound, OnFai
 
 	delay = delay or 3
 
+	-- compatible mode for block round
+	if isbool(blockRound) then
+		MsgN("[DEPRECATION WARNING]: You should use the REVIVAL_BLOCK enum here.")
+		debug.Trace()
+	end
+
+	if blockRound == nil or blockRound == false then
+		blockRound = REVIVAL_BLOCK_NONE
+	elseif blockRound == true then
+		blockRound = REVIVAL_BLOCK_AS_ALIVE
+	end
+
 	self:SetReviving(true)
-	self:SetBlockingRevival(blockRound)
+	self:SetRevivalBlockMode(blockRound)
 	self:SetRevivalStartTime(CurTime())
 	self:SetRevivalDuration(delay)
 
@@ -817,7 +838,7 @@ function plymeta:Revive(delay, OnRevive, DoCheck, needsCorpse, blockRound, OnFai
 		if not IsValid(self) then return end
 
 		self:SetReviving(false)
-		self:SetBlockingRevival(false)
+		self:SetRevivalBlockMode(REVIVAL_BLOCK_NONE)
 		self:SendRevivalReason(nil)
 
 		if not isfunction(DoCheck) or DoCheck(self) then
@@ -840,13 +861,19 @@ function plymeta:Revive(delay, OnRevive, DoCheck, needsCorpse, blockRound, OnFai
 			end
 
 			spawnPos = spawnPos or self:GetDeathPosition()
-			spawnPos = spawn.MakeSpawnPointSafe(self, spawnPos)
+			spawnPos = plyspawn.MakeSpawnPointSafe(self, spawnPos)
 
 			if not spawnPos then
-				local spawnEntity = spawn.GetRandomPlayerSpawnEntity(self)
+				local spawnPoint = plyspawn.GetRandomSafePlayerSpawnPoint(self)
 
-				spawnPos = spawnEntity:GetPos()
-				spawnEyeAngle = spawnEntity:EyeAngles()
+				if not spawnPoint then
+					OnReviveFailed(self, "message_revival_failed")
+
+					return
+				end
+
+				spawnPos = spawnPoint.pos
+				spawnEyeAngle = spawnPoint.ang
 			end
 
 			self:SetPos(spawnPos)
@@ -885,7 +912,7 @@ function plymeta:CancelRevival(failMessage, silent)
 	if not self:IsReviving() then return end
 
 	self:SetReviving(false)
-	self:SetBlockingRevival(false)
+	self:SetRevivalBlockMode(REVIVAL_BLOCK_NONE)
 	self:SendRevivalReason(nil)
 
 	timer.Remove("TTT2RevivePlayer" .. self:EntIndex())
@@ -915,18 +942,18 @@ end
 
 ---
 -- Sets the blocking revival state.
--- @param[default=false] boolean isBlockingRevival The blocking revival state
+-- @param[default=REVIVAL_BLOCK_NONE] number revivalBlockMode The blocking revival state
 -- @internal
 -- @realm server
-function plymeta:SetBlockingRevival(isBlockingRevival)
-	isBlockingRevival = isBlockingRevival or false
+function plymeta:SetRevivalBlockMode(revivalBlockMode)
+	revivalBlockMode = revivalBlockMode or REVIVAL_BLOCK_NONE
 
-	if self.isBlockingRevival == isBlockingRevival then return end
+	if self.revivalBlockMode == revivalBlockMode then return end
 
-	self.isBlockingRevival = isBlockingRevival
+	self.revivalBlockMode = revivalBlockMode
 
-	net.Start("TTT2RevivalUpdate_IsBlockingRevival")
-	net.WriteBool(self.isBlockingRevival)
+	net.Start("TTT2RevivalUpdate_RevivalBlockMode")
+	net.WriteUInt(self.revivalBlockMode, REVIVAL_BITS)
 	net.Send(self)
 end
 
@@ -1224,11 +1251,16 @@ local plymeta_old_Give = plymeta.Give
 -- @return Weapon
 -- @realm server
 function plymeta:Give(weaponClassName, bNoAmmo)
+	-- ForcedPickup needs to be used to be able to ignore the cv_auto_pickup cvar
 	self.forcedPickup = true
+
+	-- ForcedGive needs to be used to give weapons when there are cached ones, e.g. in use with the spawneditor
+	self.forcedGive = true
 
 	local wep = plymeta_old_Give(self, weaponClassName, bNoAmmo or false)
 
 	self.forcedPickup = false
+	self.forcedGive = false
 
 	return wep
 end
@@ -1239,6 +1271,10 @@ end
 -- @return boolean Returns if this weapon can be dropped
 -- @realm server
 function plymeta:CanSafeDropWeapon(wep)
+	if not wep then
+		return true
+	end
+
 	if not IsValid(wep) or not wep.AllowDrop then
 		return false
 	end
@@ -1258,13 +1294,149 @@ end
 -- Called to drop a weapon in a safe manner (e.g. preparing and space-check).
 -- @param Weapon wep The weapon that should be dropped
 -- @param boolean keepSelection If set to true the current selection is kept if not dropped
+-- @return boolean Returns if this weapon is dropped
 -- @realm server
 function plymeta:SafeDropWeapon(wep, keepSelection)
-	if not self:CanSafeDropWeapon(wep) then return end
+	if not self:CanSafeDropWeapon(wep) then
+		return false
+	end
 
 	self:AnimPerformGesture(ACT_GMOD_GESTURE_ITEM_PLACE)
 
 	WEPS.DropNotifiedWeapon(self, wep, false, keepSelection)
+
+	return true
+end
+
+local function TraceAmmoDrop(ply)
+	local pos, ang = ply:GetShootPos(), ply:EyeAngles()
+	local fwd, rgt, up = ang:Forward(), ang:Right(), ang:Up()
+
+	local dir = fwd * 32
+	rgt:Mul(6)
+	up:Mul(-5)
+	dir:Add(rgt)
+	dir:Add(up)
+
+	local tr = util.QuickTrace(pos, dir, ply)
+
+	return tr, pos, dir, fwd
+end
+
+---
+-- Checks if the ammo can be dropped in a safe manner.
+-- @param Weapon wep The weapon's ammo that should be dropped
+-- @return boolean Returns if this weapon's ammo can be dropped
+-- @realm server
+function plymeta:CanSafeDropAmmo(wep)
+	if not IsValid(self) or not (IsValid(wep) and wep.AmmoEnt) then
+		return false
+	end
+
+	local tr = TraceAmmoDrop(self)
+
+	if tr.HitWorld then
+		LANG.Msg(self, "drop_no_room_ammo", nil, MSG_MSTACK_WARN)
+
+		return false
+	end
+
+	return true
+end
+
+---
+-- Called to drop ammo in a safe manner (e.g. preparing and space-check).
+-- @param Weapon wep The weapon that should be referenced when dropping ammo.
+-- @param[default=false] boolean useClip If set to true the ammo is dropped from the clip, otherwise, from reserve ammo.
+-- @param[default=0] number amt The quantity of ammo to drop.
+-- @return boolean Returns if ammo is dropped
+-- @realm server
+function plymeta:SafeDropAmmo(wep, useClip, amt)
+	if not self:CanSafeDropAmmo(wep) then
+		return false
+	end
+
+	self:AnimPerformGesture(ACT_GMOD_GESTURE_ITEM_GIVE)
+
+	self:DropAmmo(wep, useClip, amt)
+
+	return true
+end
+
+---
+-- Called to drop a weapon's ammo. Does no safety checks.
+-- @param Weapon wep The weapon's ammo that should be dropped
+-- @param[default=false] boolean useClip If set to true the ammo is dropped from the clip, otherwise, from reserve ammo.
+-- @param[default=0] number amt The quantity of ammo to drop.
+-- @return boolean Returns if this weapon's ammo is dropped.
+-- @realm server
+function plymeta:DropAmmo(wep, useClip, amt)
+	amt = amt or 0
+
+	local box = ents.Create(wep.AmmoEnt)
+
+	if not IsValid(box) then return end
+
+	-- most of this goes into computing ammo amount
+	if amt <= 0 then
+		if useClip then
+			amt = wep:Clip1()
+		else
+			amt = math.min(
+				wep.Primary.ClipSize,
+				self:GetAmmoCount(wep.Primary.Ammo)
+			)
+		end
+	end
+	local hook_data = {amt}
+
+	---
+	-- @realm server
+	if hook.Run("TTT2DropAmmo", self, hook_data) == false then
+		LANG.Msg(self, useClip and "drop_ammo_prevented" or "drop_reserve_prevented", nil, MSG_MSTACK_WARN)
+
+		return false
+	end
+	amt = hook_data[1]
+	if amt < 1 or amt <= wep.Primary.ClipSize * 0.25 then
+		LANG.Msg(self, useClip and "drop_no_ammo" or "drop_no_reserve", nil, MSG_MSTACK_WARN)
+
+		return false
+	end
+
+	local _, pos, dir, fwd = TraceAmmoDrop(self)
+
+	pos:Add(dir)
+
+	box:SetPos(pos)
+	box:SetOwner(self)
+	box:Spawn()
+	box:PhysWake()
+
+	local phys = box:GetPhysicsObject()
+
+	if IsValid(phys) then
+		fwd:Mul(1000)
+
+		phys:ApplyForceCenter(fwd)
+		phys:ApplyForceOffset(VectorRand(), vector_origin)
+	end
+
+	box.AmmoAmount = amt
+
+	timer.Simple(2, function()
+		if not IsValid(box) then return end
+
+		box:SetOwner(nil)
+	end)
+
+	if useClip then
+		wep:SetClip1( math.max(wep:Clip1() - amt, 0) )
+	else
+		self:RemoveAmmo(amt, wep.Primary.Ammo)
+	end
+
+	return true
 end
 
 ---
@@ -1280,7 +1452,7 @@ function plymeta:CanPickupWeapon(wep, forcePickup, dropBlockingWeapon)
 
 	---
 	-- @realm server
-	local ret, errCode = hook.Run("PlayerCanPickupWeapon", self, wep, dropBlockingWeapon)
+	local ret, errCode = hook.Run("PlayerCanPickupWeapon", self, wep, dropBlockingWeapon, true)
 
 	self.forcedPickup = false
 
@@ -1303,11 +1475,11 @@ end
 ---
 -- This function simplifies the weapon pickup process for a player by
 -- handling all the needed calls.
--- @param Weapon wep The weapon object
--- @param nil|boolean ammoOnly If set to true, the player will only attempt to pick up the ammo from the weapon. The weapon will not be picked up even if the player doesn't have a weapon of this type, and the weapon will be removed if the player picks up any ammo from it
--- @param nil|boolean forcePickup Should the pickup been forced (ignores the cv_auto_pickup cvar)
--- @param[default=false] nil|boolean dropBlockingWeapon Should the currently selecten weapon be dropped
--- @param nil|boolean shouldAutoSelect Should this weapon be autoselected after equip, if not set this value is set by player keypress
+-- @param Weapon wep The weapon entity that should be picked up
+-- @param[opt] boolean ammoOnly If set to true, the player will only attempt to pick up the ammo from the weapon. The weapon will not be picked up even if the player doesn't have a weapon of this type, and the weapon will be removed if the player picks up any ammo from it
+-- @param[default=false] boolean forcePickup Should the pickup been forced (ignores the cv_auto_pickup cvar)
+-- @param[default=false] boolean dropBlockingWeapon Should the currently selecten weapon be dropped
+-- @param[opt] boolean shouldAutoSelect Should this weapon be autoselected after equip, if not set this value is set by player keypress
 -- @return Weapon if successful, nil if not
 -- @realm server
 function plymeta:SafePickupWeapon(wep, ammoOnly, forcePickup, dropBlockingWeapon, shouldAutoSelect)
@@ -1323,7 +1495,7 @@ function plymeta:SafePickupWeapon(wep, ammoOnly, forcePickup, dropBlockingWeapon
 	-- drop the weapon safely
 	if not InventorySlotFree(self, wep.Kind) and not self:CanSafeDropWeapon(wep) then return end
 
-	local ret, errCode = self:CanPickupWeapon(wep, forcePickup or true, dropBlockingWeapon)
+	local ret, errCode = self:CanPickupWeapon(wep, forcePickup, dropBlockingWeapon)
 
 	if not ret then
 		if errCode == 1 then
@@ -1332,6 +1504,8 @@ function plymeta:SafePickupWeapon(wep, ammoOnly, forcePickup, dropBlockingWeapon
 			LANG.Msg(self, "pickup_error_owns")
 		elseif errCode == 3 then
 			LANG.Msg(self, "pickup_error_noslot")
+		elseif errCode == 6 then
+			LANG.Msg(self, "pickup_error_inv_cached")
 		end
 
 		return
@@ -1355,11 +1529,7 @@ function plymeta:SafePickupWeapon(wep, ammoOnly, forcePickup, dropBlockingWeapon
 		-- Very very rarely happens but definitely breaks the weapon and should be avoided at all costs
 		if dropWeapon == wep then return end
 
-		timer.Simple(0, function()
-			if not IsValid(self) or not IsValid(dropWeapon) then return end
-
-			self:SafeDropWeapon(dropWeapon, true)
-		end)
+		if not self:SafeDropWeapon(dropWeapon, true) then return end
 
 		-- set flag to new weapon that is used to autoselect it later on
 		shouldAutoSelect = shouldAutoSelect or isActiveWeapon
@@ -1422,8 +1592,100 @@ local function SetPlayerReady(_, ply)
 	-- Send full state update to client
 	ttt2net.SendFullStateUpdate(ply)
 
+	entspawnscript.TransmitToPlayer(ply)
+
 	---
 	-- @realm server
 	hook.Run("TTT2PlayerReady", ply)
 end
 net.Receive("TTT2SetPlayerReady", SetPlayerReady)
+
+-- Resets the cached weapons. This is automatically done on a weapon restore,
+-- but has to be triggered manually in scenarios where the inventory is reset
+-- without triggering the restore function, e.g. @{GM:PlayerSpawn}.
+-- @realm server
+function plymeta:ResetCachedWeapons()
+	self.cachedWeaponInventory = nil
+	self.cachedWeaponSelected = nil
+end
+
+---
+-- Checks wether a player has cached weapons that can be restored.
+-- @return boolean Returns wether the player has a cached inventory
+-- @realm server
+function plymeta:HasCachedWeapons()
+	return self.cachedWeaponInventory ~= nil
+end
+
+---
+-- Caches the weapons currently in the player inventory and removes them.
+-- These weapons can be restored at any time.
+-- @note As long as a player has cached weapons, they are unable to pick up any weapon.
+-- @realm server
+function plymeta:CacheAndStripWeapons()
+	local cachedWeaponInventory = {}
+
+	local weps = self:GetWeapons()
+
+	for i = 1, #weps do
+		local wep = weps[i]
+
+		cachedWeaponInventory[#cachedWeaponInventory + 1] = {
+			cls = WEPS.GetClass(wep),
+			clip1 = wep:Clip1(),
+			clip2 = wep:Clip2()
+		}
+	end
+
+	self.cachedWeaponInventory = cachedWeaponInventory
+	self.cachedWeaponSelected = WEPS.GetClass(self:GetActiveWeapon())
+
+	self:StripWeapons()
+end
+
+---
+-- Restores the cached weapons if there are any cached weapons. Does nothing if
+-- no weapons are cached.
+-- @realm server
+function plymeta:RestoreCachedWeapons()
+	if not self:HasCachedWeapons() then return end
+
+	for i = 1, #self.cachedWeaponInventory do
+		local wep = self.cachedWeaponInventory[i]
+
+		local givenWep = self:Give(wep.cls)
+
+		if not IsValid(givenWep) then continue end
+
+		givenWep:SetClip1(wep.clip1 or 0)
+		givenWep:SetClip2(wep.clip2 or 0)
+	end
+
+	if self.cachedWeaponSelected then
+		self:SelectWeapon(self.cachedWeaponSelected)
+	end
+
+	self:ResetCachedWeapons()
+end
+
+---
+-- Called before the player receives their default credits.
+-- @param Player ply The player who should receive their default credits
+-- @return nil|boolean Return true to prevent the player from
+-- receiving their credits
+-- @hook
+-- @realm server
+function GM:TTT2SetDefaultCredits(ply)
+
+end
+
+---
+-- Hook that is used to modify the default credits of a traitor.
+-- @param Player ply The player whose credits should be changed
+-- @param number credits The amount of credits the player would normally receive
+-- @return nil|number The amound of credits the player should receive
+-- @hook
+-- @realm server
+function GM:TTT2ModifyDefaultTraitorCredits(ply, credits)
+
+end

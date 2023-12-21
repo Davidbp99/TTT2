@@ -6,6 +6,16 @@ local materialBack = Material("vgui/ttt/vskin/icon_back")
 local materialCollapseOpened = Material("vgui/ttt/vskin/icon_collapse_opened")
 local materialCollapseClosed = Material("vgui/ttt/vskin/icon_collapse_closed")
 local materialRhombus = Material("vgui/ttt/vskin/rhombus")
+local materialCardAdded = Material("vgui/ttt/vskin/card_added")
+local materialCardRemoved = Material("vgui/ttt/vskin/card_removed")
+local materialHeadboxYes = Material("vgui/ttt/vskin/icon_headbox_yes")
+local materialHeadboxNo = Material("vgui/ttt/vskin/icon_headbox_no")
+local materialHattableYes = Material("vgui/ttt/vskin/icon_hattable_yes")
+local materialHattableNo = Material("vgui/ttt/vskin/icon_hattable_no")
+
+local colorCardAdded = Color(80, 190, 25)
+local colorCardInheritAdded = Color(25, 190, 175)
+local colorCardInheritRemoved = Color(185, 45, 25)
 
 local SKIN = {
 	Name = "ttt2_default"
@@ -13,6 +23,7 @@ local SKIN = {
 
 local TryT = LANG.TryTranslation
 local ParT = LANG.GetParamTranslation
+local DynT = LANG.GetDynamicTranslation
 
 local mathRound = math.Round
 
@@ -58,11 +69,13 @@ surface.CreateAdvancedFont("DermaTTT2MenuButtonDescription", {font = "Trebuchet2
 surface.CreateAdvancedFont("DermaTTT2SubMenuButtonTitle", {font = "Trebuchet24", size = 18, weight = 600})
 surface.CreateAdvancedFont("DermaTTT2Button", {font = "Trebuchet24", size = 14, weight = 600})
 surface.CreateAdvancedFont("DermaTTT2CatHeader", {font = "Trebuchet24", size = 16, weight = 900})
+surface.CreateAdvancedFont("DermaTTT2TextSmall", {font = "Trebuchet24", size = 12, weight = 300})
 surface.CreateAdvancedFont("DermaTTT2Text", {font = "Trebuchet24", size = 16, weight = 300})
 surface.CreateAdvancedFont("DermaTTT2TextLarge", {font = "Trebuchet24", size = 18, weight = 300})
 surface.CreateAdvancedFont("DermaTTT2TextLarger", {font = "Trebuchet24", size = 20, weight = 900})
 surface.CreateAdvancedFont("DermaTTT2TextLargest", {font = "Trebuchet24", size = 24, weight = 900})
 surface.CreateAdvancedFont("DermaTTT2TextHuge", {font = "Trebuchet24", size = 72, weight = 900})
+surface.CreateAdvancedFont("DermaTTT2SmallBold", {font = "Trebuchet24", size = 14, weight = 900})
 
 ---
 -- Updates the @{SKIN}
@@ -120,7 +133,16 @@ function SKIN:PaintFrameTTT2(panel, w, h)
 	drawBox(0, 0, w, sizes.header, colors.accent)
 	drawBox(0, sizes.header, w, sizes.border, colors.accentDark)
 
-	drawShadowedText(TryT(panel:GetTitle()), panel:GetTitleFont(), 0.5 * w, 0.5 * sizes.header, colors.titleText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1)
+	local title = panel:GetTitle()
+	local text = ""
+
+	if istable(title) then
+		text = ParT(title.body, title.params)
+	else
+		text = TryT(title)
+	end
+
+	drawShadowedText(text, panel:GetTitleFont(), 0.5 * w, 0.5 * sizes.header, colors.titleText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1)
 end
 
 ---
@@ -139,7 +161,8 @@ end
 -- @param number h
 -- @realm client
 function SKIN:PaintNavPanelTTT2(panel, w, h)
-	drawBox(w - 1, 0, 1, h, ColorAlpha(colors.default, 200))
+	local _, _, rightPad = panel:GetDockPadding()
+	drawBox(w - rightPad, 0, rightPad, h, ColorAlpha(colors.default, 200))
 end
 
 ---
@@ -319,31 +342,43 @@ function SKIN:PaintSubMenuButtonTTT2(panel, w, h)
 	local colorBackground = colors.background
 	local colorBar = colors.background
 	local colorText = utilGetChangedColor(colors.default, 75)
+	local colorIcon = utilGetChangedColor(COLOR_WHITE, 32)
 	local shift = 0
 	local pad = mathRound(0.3 * h)
 	local hasIcon = panel:HasIcon()
-	local sizeIcon = h - 2 * pad
+	local isIconFullSize = panel:IsIconFullSize()
+	local padIcon = isIconFullSize and 0 or pad
+	local iconBadge = panel:GetIconBadge()
+	local iconBadgeSize = panel:GetIconBadgeSize()
+	local iconAlpha = isIconFullSize and 255 or colorText.a
+	local sizeIcon = h - 2 * padIcon
 
 	if panel.Depressed or panel:IsSelected() or panel:GetToggle() then
 		colorBackground = utilGetActiveColor(ColorAlpha(colors.accent, 50))
 		colorBar = colors.accentActive
 		colorText = utilGetActiveColor(utilGetChangedColor(colors.default, 25))
+		colorIcon = utilGetActiveColor(utilGetChangedColor(COLOR_WHITE, 32))
 		shift = 1
 	elseif panel.Hovered then
 		colorBackground = utilGetHoverColor(ColorAlpha(colors.accent, 50))
 		colorBar = colors.accentHover
 		colorText = utilGetHoverColor(utilGetChangedColor(colors.default, 75))
+		colorIcon = utilGetHoverColor(utilGetChangedColor(COLOR_WHITE, 48))
 	elseif panel:IsActive() then
 		colorBackground = utilGetHoverColor(ColorAlpha(colors.accent, 50))
 		colorBar = colors.accentHover
 		colorText = utilGetHoverColor(utilGetChangedColor(colors.default, 75))
+		colorIcon = utilGetHoverColor(utilGetChangedColor(COLOR_WHITE, 48))
 	end
 
 	drawBox(0, 0, sizes.border, h, colorBar)
 	drawBox(sizes.border, 0, w - sizes.border, h, colorBackground)
 
 	if hasIcon then
-		drawFilteredShadowedTexture(pad + sizes.border, pad + shift, sizeIcon, sizeIcon, panel:GetIcon(), colorText.a, colorText)
+		drawFilteredShadowedTexture(pad + sizes.border, padIcon + shift, sizeIcon, sizeIcon, panel:GetIcon(), iconAlpha, colorIcon)
+		if iconBadge then
+			drawFilteredShadowedTexture(pad + sizes.border + sizeIcon - iconBadgeSize, padIcon + shift + sizeIcon - iconBadgeSize, iconBadgeSize, iconBadgeSize, iconBadge, iconAlpha, colors.accent)
+		end
 	end
 
 	drawSimpleText(
@@ -415,8 +450,10 @@ function SKIN:PaintCheckBoxLabel(panel, w, h)
 
 	drawRoundedBoxEx(sizes.cornerRadius, 0, 0, w, h, colorBox, true, false, true, false)
 
+	local params = panel:GetTextParams()
+
 	drawSimpleText(
-		TryT(panel:GetText()),
+		params and ParT(panel:GetText(), params) or TryT(panel:GetText()),
 		panel:GetFont(),
 		panel:GetTextPosition(),
 		0.5 * h,
@@ -499,10 +536,37 @@ function SKIN:PaintButtonTTT2(panel, w, h)
 	drawBox(0, 0, w, h, colorBox)
 	drawBox(0, h - sizes.border, w, sizes.border, colorLine)
 
+	local translatedText = ""
+	if panel:HasTextParams() then
+		translatedText = string.upper(ParT(panel:GetText(), panel:GetTextParams()))
+	else
+		translatedText = string.upper(TryT(panel:GetText()))
+	end
+
+	local font = panel:GetFont()
+	local xText = 0.5 * w
+
+	if panel:HasIcon() then
+		local widthText = drawGetTextSize(translatedText, font)
+		local padding = 5
+		local sizeIcon = panel:GetIconSize()
+		local yIcon = 0.5 * (h - sizeIcon)
+
+		xText = 0.5 * (w + sizeIcon + padding)
+
+		local xIcon = xText - sizeIcon - padding - 0.5 * widthText
+
+		if panel:IsIconShadowed() then
+			drawFilteredShadowedTexture(xIcon, yIcon, sizeIcon, sizeIcon, panel:GetIcon(), 255, colorText)
+		else
+			drawFilteredTexture(xIcon, yIcon, sizeIcon, sizeIcon, panel:GetIcon(), 255, COLOR_WHITE)
+		end
+	end
+
 	drawShadowedText(
-		string.upper(TryT(panel:GetText())),
-		panel:GetFont(),
-		0.5 * w,
+		translatedText,
+		font,
+		xText,
 		0.5 * (h - sizes.border) + shift,
 		colorText,
 		TEXT_ALIGN_CENTER,
@@ -587,6 +651,41 @@ function SKIN:PaintBinderButtonTTT2(panel, w, h)
 		0.5 * h + shift,
 		colorText,
 		TEXT_ALIGN_CENTER,
+		TEXT_ALIGN_CENTER
+	)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintLabelSpacerTTT2(panel, w, h)
+	local text = TryT(panel:GetText())
+	local font = panel:GetFont()
+
+	local padding = 10
+	local heightBar = 5
+	local barX1 = 0
+	local barY1 = 0.5 * (h - heightBar) + 1
+	local widthBar1 = 20
+	local textX = barX1 + widthBar1 + padding
+	local widthText = drawGetTextSize(text, font)
+	local barX2 = textX + widthText + padding
+	local widthBar2 = w - barX2
+
+	local colorLine = utilGetChangedColor(colors.default, 170)
+
+	drawBox(barX1, barY1, widthBar1, heightBar, colorLine)
+	drawBox(barX2, barY1, widthBar2, heightBar, colorLine)
+
+	drawSimpleText(
+		text,
+		font,
+		textX,
+		0.5 * h,
+		utilGetChangedColor(colors.default, 40),
+		TEXT_ALIGN_LEFT,
 		TEXT_ALIGN_CENTER
 	)
 end
@@ -695,7 +794,7 @@ function SKIN:PaintHelpLabelTTT2(panel, w, h)
 	drawBox(0, 0, w, h, colors.helpBox)
 	drawBox(0, 0, 4, h, colors.helpBar)
 
-	local textTranslated = ParT(panel:GetText(), panel:GetParams())
+	local textTranslated = ParT(panel:GetText(), TryT(panel:GetTextParams()))
 	local textWrapped = drawGetWrappedText(
 		textTranslated,
 		w - 2 * panel.paddingX,
@@ -784,16 +883,23 @@ function SKIN:PaintSliderTextAreaTTT2(panel, w, h)
 		colorText = ColorAlpha(colors.settingsText, alphaDisabled)
 	end
 
-	drawBox(0, 0, w, h, colorBox)
-	drawSimpleText(
-		panel:GetText(),
-		panel:GetFont(),
-		0.5 * w,
-		0.5 * h,
-		colorText,
-		TEXT_ALIGN_CENTER,
-		TEXT_ALIGN_CENTER
-	)
+	-- Draw normal text if currently not in input mode, otherwise draw the TTT2 Text Entry
+	if not panel:GetParent():GetTextBoxEnabled() then
+		drawBox(0, 0, w, h, colorBox)
+		drawSimpleText(
+			panel:GetText(),
+			panel:GetFont(),
+			0.5 * w,
+			0.5 * h,
+			colorText,
+			TEXT_ALIGN_CENTER,
+			TEXT_ALIGN_CENTER
+		)
+	else
+		self:PaintTextEntryTTT2(panel, w, h)
+		local vguiColor = utilGetActiveColor(utilGetChangedColor(utilGetDefaultColor(vskinGetBackgroundColor()), 25))
+		panel:DrawTextEntryText(vguiColor, vguiColor, vguiColor)
+	end
 end
 
 ---
@@ -1167,6 +1273,466 @@ function SKIN:PaintEventBoxTTT2(panel, w, h)
 		end
 
 		posY = posY + height + 15
+	end
+end
+
+local MODE_ADDED = ShopEditor.MODE_ADDED
+local MODE_INHERIT_ADDED = ShopEditor.MODE_INHERIT_ADDED
+local MODE_INHERIT_REMOVED = ShopEditor.MODE_INHERIT_REMOVED
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintCardTTT2(panel, w, h)
+	local widthBorder = 2
+	local widthBorder2 = widthBorder * 2
+	local sizeIcon = 64
+	local padding = 5
+	local posIcon = widthBorder + padding
+	local posText = posIcon + sizeIcon + 2 * padding
+	local heightMode = 35
+	local widthMode = w - sizeIcon - 3 * padding
+	local posIconModeX = w - widthMode + 2 * padding
+	local posIconModeY = h - heightMode + 2 * padding
+	local sizeIconMode = heightMode - 4 * padding
+	local posTextModeX = posIconModeX + sizeIconMode + 2 * padding
+	local posTextModeY = posIconModeY + 0.5 * sizeIconMode - 1
+
+	local colorBackground = colors.settingsBox
+	local colorText = colors.settingsText
+	local colorMode = utilGetChangedColor(colors.background, 75)
+
+	local materialMode = materialCardRemoved
+	local textMode = "equip_not_added"
+
+	if panel:GetMode() == MODE_ADDED then
+		colorMode = colorCardAdded
+		materialMode = materialCardAdded
+		textMode = "equip_added"
+	elseif panel:GetMode() == MODE_INHERIT_ADDED then
+		colorMode = colorCardInheritAdded
+		materialMode = materialCardAdded
+		textMode = "equip_inherit_added"
+	elseif panel:GetMode() == MODE_INHERIT_REMOVED then
+		colorMode = colorCardInheritRemoved
+		textMode = "equip_inherit_removed"
+	end
+
+	local colorTextMode = utilGetDefaultColor(colorMode)
+
+	if panel.Hovered then
+		colorBackground = colors.accentHover
+	end
+
+	drawRoundedBox(sizes.cornerRadius, 0, 0, w, h, colorMode)
+	drawRoundedBox(sizes.cornerRadius, widthBorder, widthBorder, w - widthBorder2, h - widthBorder2, colorBackground)
+
+	drawFilteredTexture(posIcon, posIcon, sizeIcon, sizeIcon, panel:GetIcon())
+
+	drawSimpleText(
+		TryT(panel:GetText()),
+		panel:GetFont(),
+		posText,
+		posIcon + padding,
+		colorText,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_TOP
+	)
+
+	drawRoundedBoxEx(sizes.cornerRadius, w - widthMode, h - heightMode, widthMode, heightMode, colorMode, true, false, false, true)
+
+	drawFilteredTexture(posIconModeX, posIconModeY, sizeIconMode, sizeIconMode, materialMode, 175, colorTextMode)
+
+	drawSimpleText(
+		TryT(textMode),
+		"DermaTTT2TextSmall",
+		posTextModeX,
+		posTextModeY,
+		colorTextMode,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_CENTER
+	)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintRoleImageTTT2(panel, w, h)
+	local colorBackground = panel:GetColor()
+	local colorIcon = utilGetDefaultColor(colorBackground)
+
+	drawRoundedBox(sizes.cornerRadius, 0, 0, w, h, colorBackground)
+	drawFilteredShadowedTexture(0, 0, w, h, panel:GetMaterial(), colorIcon.a, colorIcon)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintRoleLayeringSenderTTT2(panel, w, h)
+	local colorBox = utilGetChangedColor(colors.background, 40)
+	local colorText = utilGetDefaultColor(colorBox)
+
+	drawRoundedBox(sizes.cornerRadius, 0, 0, w, h, colorBox)
+
+	drawSimpleText(
+		TryT("layering_not_layered"),
+		"DermaTTT2Text",
+		10,
+		0.5 * h,
+		colorText,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_CENTER
+	)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintRoleLayeringReceiverTTT2(panel, w, h)
+	local colorBox = utilGetChangedColor(colors.background, 20)
+	local colorText = utilGetDefaultColor(colorBox)
+
+	for i = 1, #panel.layerBoxes do
+		local layerBox = panel.layerBoxes[i]
+
+		drawRoundedBox(sizes.cornerRadius, 0, layerBox.y, w, layerBox.h, colorBox)
+
+		drawSimpleText(
+			ParT("layering_layer", {layer = i}),
+			"DermaTTT2Text",
+			10,
+			layerBox.label,
+			colorText,
+			TEXT_ALIGN_LEFT,
+			TEXT_ALIGN_CENTER
+		)
+	end
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintSearchbar(panel, w, h)
+	local colorBox = colors.helpBox
+	local colorBar = colors.accentHover
+	local colorText = utilGetActiveColor(utilGetChangedColor(colors.default, 25))
+	local heightMult = panel:GetHeightMult()
+
+	local leftPad, topPad, rightPad, bottomPad = panel:GetDockPadding()
+	local widthPad = leftPad + rightPad
+	local heightPad = topPad + bottomPad
+
+	if not panel:IsEnabled() then
+		colorBox = ColorAlpha(colorBox, alphaDisabled)
+		colorBar = ColorAlpha(colorBar, alphaDisabled)
+		colorText = ColorAlpha(colorText, alphaDisabled)
+	end
+
+	-- Draw custom box background for the searchBar
+	drawBox(leftPad, h * (1 - heightMult) * 0.5 + topPad, w - widthPad, h * heightMult - heightPad, colorBox)
+
+	-- Draw small blue bar on the bottom
+	drawBox(leftPad, h - sizes.border - bottomPad, w - widthPad, sizes.border, colorBar)
+
+	-- If not focussed draw placeholder text
+	if panel:GetIsOnFocus() then return end
+
+	drawSimpleText(
+		TryT(panel:GetCurrentPlaceholderText()),
+		panel:GetFont(),
+		leftPad + w * 0.02,
+		0.5 * h,
+		colorText,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_CENTER
+	)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintTextEntryTTT2(panel, w, h)
+	local colorBox = colors.settingsBox
+	local colorHandle = colors.handle
+
+	if not panel:IsEnabled() then
+		colorBox = ColorAlpha(colors.settingsBox, alphaDisabled)
+		colorHandle = ColorAlpha(colors.handle, alphaDisabled)
+	end
+
+	drawBox(0, 0, w, h, colorBox)
+	drawRoundedBox(sizes.cornerRadius, 1, 1, w - 2, h - 2, colorHandle)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintImageCheckBoxTTT2(panel, w, h)
+	local widthBorder = 2
+	local widthBorder2 = widthBorder * 2
+	local padding = 5
+	local heightMode = 35
+	local widthMode = 175
+	local posIconModeX = w - widthMode + 2 * padding
+	local posIconModeY = h - heightMode + 2 * padding
+	local sizeIconMode = heightMode - 4 * padding
+	local posTextModeX = posIconModeX + sizeIconMode + 2 * padding
+	local posTextModeY = posIconModeY + 0.5 * sizeIconMode - 1
+	local posStatusIconBoxX = 8
+	local sizeStatusIconBox = 32
+	local sizeStatusIcon = sizeStatusIconBox - 2 * padding
+	local posStatusIconX = posStatusIconBoxX + padding
+
+	local posHeadIconBoxY = 8
+	local posHeadIconY = posHeadIconBoxY + padding
+	local posHattableIconBoxY = posHeadIconBoxY + sizeStatusIconBox + padding
+	local posHattableIconY = posHattableIconBoxY + padding
+
+	local colorBackground = colors.settingsBox
+	local colorMode = utilGetChangedColor(colors.background, 75)
+	local colorTextMode = utilGetDefaultColor(colorMode)
+	local colorHeadIcon = colorCardInheritRemoved
+	local colorHattableIcon = colorCardInheritRemoved
+
+	local materialMode = materialCardRemoved
+	local materialHeadIcon = materialHeadboxNo
+	local materialHattableIcon = materialHattableNo
+
+	if panel.Hovered then
+		colorBackground = colors.accentHover
+	end
+
+	if panel:IsModelSelected() then
+		colorMode = colorCardAdded
+		materialMode = materialCardAdded
+	end
+
+	if panel:HasHeadBox() then
+		colorHeadIcon = colorCardAdded
+		materialHeadIcon = materialHeadboxYes
+	end
+
+	if panel:IsModelHattable() then
+		colorHattableIcon = colorCardAdded
+		materialHattableIcon = materialHattableYes
+	end
+
+	drawRoundedBox(sizes.cornerRadius, 0, 0, w, h, colorMode)
+	drawRoundedBox(sizes.cornerRadius, widthBorder, widthBorder, w - widthBorder2, h - widthBorder2, colorBackground)
+
+	if panel:HasModel() then
+		panel:DrawModel()
+	end
+
+	drawRoundedBoxEx(sizes.cornerRadius, w - widthMode, h - heightMode, widthMode, heightMode, colorMode, true, false, false, true)
+	drawFilteredTexture(posIconModeX, posIconModeY, sizeIconMode, sizeIconMode, materialMode, 175, colorTextMode)
+
+	drawSimpleText(
+		TryT(panel:GetText()),
+		"DermaTTT2Text",
+		posTextModeX,
+		posTextModeY,
+		colorTextMode,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_CENTER
+	)
+
+	drawRoundedBox(sizes.cornerRadius, posStatusIconBoxX, posHeadIconBoxY, sizeStatusIconBox, sizeStatusIconBox, colorHeadIcon)
+	drawFilteredTexture(posStatusIconX, posHeadIconY, sizeStatusIcon, sizeStatusIcon, materialHeadIcon, 200, COLOR_WHITE)
+
+	drawRoundedBox(sizes.cornerRadius, posStatusIconBoxX, posHattableIconBoxY, sizeStatusIconBox, sizeStatusIconBox, colorHattableIcon)
+	drawFilteredTexture(posStatusIconX, posHattableIconY, sizeStatusIcon, sizeStatusIcon, materialHattableIcon, 200, COLOR_WHITE)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintProfilePanelTTT2(panel, w, h)
+	local padding = 5
+
+	local heightBottom = 100
+
+	local widthRender = w - 2 * padding
+	local heightRender = h - padding - heightBottom
+
+	local sizePlayerIcon = 64
+	local xRoleIcon = 0.5 * (widthRender - sizePlayerIcon) + padding
+	local yRoleIcon = heightRender + padding - 0.5 * sizePlayerIcon
+
+	local sizePlayerIconBox = sizePlayerIcon + 2 * padding
+	local xPlayerIconBox = xRoleIcon - padding
+	local yPlayerIconBox = yRoleIcon - padding
+
+	local sizeRoleIcon = 32
+	local posRoleIcon = 2 * padding
+
+	local yTextTeam = h - 26
+	local yTextRole = yTextTeam - 22
+	local xText = 0.5 * w
+
+	-- cache colors
+	local colorBackground = colors.background
+	local colorRole = panel:GetPlayerRoleColor()
+	local colorRoleText = utilGetDefaultColor(colorRole)
+	local colorRoleIcon = utilGetDefaultColor(colorBackground)
+
+	-- cache materials
+	local materialPlayerIcon = panel:GetPlayerIcon()
+	local materialRole = panel:GetPlayerRoleIcon()
+
+	drawBox(0, 0, w, h, colorRole)
+	drawBox(padding, padding, widthRender, heightRender, colorBackground)
+
+	if panel:HasModel() then
+		panel:DrawModel(padding, padding, widthRender, heightRender)
+	end
+
+	drawBox(xPlayerIconBox, yPlayerIconBox, sizePlayerIconBox, sizePlayerIconBox, colorRole)
+	drawFilteredTexture(xRoleIcon, yRoleIcon, sizePlayerIcon, sizePlayerIcon, materialPlayerIcon, 255, COLOR_WHITE)
+
+	drawFilteredShadowedTexture(posRoleIcon, posRoleIcon, sizeRoleIcon, sizeRoleIcon, materialRole, 255, colorRoleIcon)
+
+	drawShadowedText(
+		TryT(panel:GetPlayerRoleString()),
+		"DermaTTT2TextLargest",
+		xText,
+		yTextRole,
+		colorRoleText,
+		TEXT_ALIGN_CENTER,
+		TEXT_ALIGN_CENTER
+	)
+
+	drawShadowedText(
+		TryT(panel:GetPlayerTeamString()),
+		"DermaTTT2TextLarger",
+		xText,
+		yTextTeam,
+		colorRoleText,
+		TEXT_ALIGN_CENTER,
+		TEXT_ALIGN_CENTER
+	)
+end
+
+---
+-- @param Panel panel
+-- @param number w
+-- @param number h
+-- @realm client
+function SKIN:PaintInfoItemTTT2(panel, w, h)
+	local hasIcon = panel:HasIcon()
+
+	local padding = 5
+
+	local widthBorder = 2
+	local widthBorder2 = 2 * widthBorder
+
+	local sizeIcon = 64
+	local posIcon = widthBorder + padding
+
+	local posText = hasIcon and (posIcon + sizeIcon + 2 * padding) or (posIcon + padding)
+	local heightText = 15
+
+	local colorBackground = panel:GetColor() or colors.settingsBox
+	local colorBorderDefault = utilGetChangedColor(colors.background, 75)
+	local colorText = utilGetDefaultColor(colorBackground)
+
+	drawRoundedBox(sizes.cornerRadius, 0, 0, w, h, colorBorderDefault)
+	drawRoundedBox(sizes.cornerRadius, widthBorder, widthBorder, w - widthBorder2, h - widthBorder2, colorBackground)
+
+	if hasIcon then
+		drawFilteredTexture(posIcon, posIcon, sizeIcon, sizeIcon, panel:GetIcon())
+	end
+
+	if (hasIcon and panel:HasIconTextFunction()) then
+		local textString = panel:GetIconText()
+
+		local widthIconText = drawGetTextSize(textString, "DermaTTT2SmallBold")
+		local xIconText = posIcon + 0.5 * sizeIcon
+		local yIconText = posIcon + 0.75 * sizeIcon
+		local widthIconTextBox = widthIconText + 8
+		local heightIconTextBox = 16
+
+		local colorLiveTimeBackground = colors.settingsBox
+
+		drawRoundedBox(sizes.cornerRadius, xIconText - 0.5 * widthIconTextBox, yIconText - 7, widthIconTextBox, heightIconTextBox, colorLiveTimeBackground)
+
+		drawShadowedText(
+			textString,
+			"DermaTTT2SmallBold",
+			xIconText,
+			yIconText,
+			COLOR_ORANGE,
+			TEXT_ALIGN_CENTER,
+			TEXT_ALIGN_CENTER
+		)
+	end
+
+	local title = panel:GetTitle()
+	local text_title = ""
+
+	if title.params then
+		text_title = ParT(title.body, title.params)
+	else
+		text_title = TryT(title.body)
+	end
+
+	drawSimpleText(
+		text_title,
+		"DermaTTT2TitleSmall",
+		posText,
+		posIcon,
+		colorText,
+		TEXT_ALIGN_LEFT,
+		TEXT_ALIGN_TOP
+	)
+
+	local text = panel:GetText()
+	local text_translated = ""
+	for i = 1, #text do
+		local params = text[i].params
+		local body = text[i].body
+
+		if not body then continue end
+
+		text_translated = text_translated .. DynT(body, params, true) .. ""
+	end
+
+	local text_wrapped = drawGetWrappedText(
+		text_translated,
+		w - posText - padding,
+		"DermaDefault"
+	)
+
+	local posY = posIcon + heightText + 4
+
+	for k = 1, #text_wrapped do
+		drawSimpleText(
+			text_wrapped[k],
+			"DermaDefault",
+			posText,
+			posY,
+			colorText,
+			TEXT_ALIGN_LEFT,
+			TEXT_ALIGN_TOP
+		)
+
+		posY = posY + heightText
 	end
 end
 

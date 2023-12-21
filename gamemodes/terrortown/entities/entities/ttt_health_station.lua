@@ -5,7 +5,7 @@
 
 if SERVER then
 	AddCSLuaFile()
-else -- CLIENT
+else
 	-- this entity can be DNA-sampled so we need some display info
 	ENT.Icon = "vgui/ttt/icon_health"
 	ENT.PrintName = "hstation_name"
@@ -26,11 +26,6 @@ ENT.HealRate = 1
 ENT.HealFreq = 0.2
 
 ---
--- @accessor number
--- @realm shared
-AccessorFuncDT(ENT, "StoredHealth", "StoredHealth")
-
----
 -- @accessor Player
 -- @realm shared
 AccessorFunc(ENT, "Placer", "Placer")
@@ -38,7 +33,7 @@ AccessorFunc(ENT, "Placer", "Placer")
 ---
 -- @realm shared
 function ENT:SetupDataTables()
-	self:DTVar("Int", 0, "StoredHealth")
+	self:NetworkVar("Int", 0, "StoredHealth")
 end
 
 ---
@@ -95,35 +90,50 @@ function ENT:TakeFromStorage(amount)
 	return amount
 end
 
-local healsound = Sound("items/medshot4.wav")
-local failsound = Sound("items/medshotno1.wav")
-local last_sound_time = 0
+local soundHealing = Sound("items/medshot4.wav")
+local soundFail = Sound("items/medshotno1.wav")
+local timeLastSound = 0
+
+---
+-- This hook that is called on the use of this entity, but only if the player
+-- can be healed.
+-- @param Player ply The player that is healed
+-- @param Entity ent The healthstation entity that is used
+-- @param number healed The amount of health receivde in this tick
+-- @return boolean Return false to cancel the heal tick
+-- @hook
+-- @realm server
+function GAMEMODE:TTTPlayerUsedHealthStation(ply, ent, healed)
+
+end
 
 ---
 -- @param Player ply
--- @param number max_heal
+-- @param number healthMax
 -- @return boolean
 -- @realm shared
-function ENT:GiveHealth(ply, max_heal)
+function ENT:GiveHealth(ply, healthMax)
 	if self:GetStoredHealth() > 0 then
-		max_heal = max_heal or self.MaxHeal
+		healthMax = healthMax or self.MaxHeal
 
 		local dmg = ply:GetMaxHealth() - ply:Health()
 		if dmg > 0 then
 			-- constant clamping, no risks
-			local healed = self:TakeFromStorage(math.min(max_heal, dmg))
+			local healed = self:TakeFromStorage(math.min(healthMax, dmg))
 			local new = math.min(ply:GetMaxHealth(), ply:Health() + healed)
-
-			ply:SetHealth(new)
 
 			---
 			-- @realm shared
-			hook.Run("TTTPlayerUsedHealthStation", ply, self, healed)
+			if hook.Run("TTTPlayerUsedHealthStation", ply, self, healed) == false then
+				return false
+			end
 
-			if last_sound_time + 2 < CurTime() then
-				self:EmitSound(healsound)
+			ply:SetHealth(new)
 
-				last_sound_time = CurTime()
+			if timeLastSound + 2 < CurTime() then
+				self:EmitSound(soundHealing)
+
+				timeLastSound = CurTime()
 			end
 
 			if not table.HasValue(self.fingerprints, ply) then
@@ -132,10 +142,10 @@ function ENT:GiveHealth(ply, max_heal)
 
 			return true
 		else
-			self:EmitSound(failsound)
+			self:EmitSound(soundFail)
 		end
 	else
-		self:EmitSound(failsound)
+		self:EmitSound(soundFail)
 	end
 
 	return false
@@ -175,7 +185,7 @@ if SERVER then
 
 	---
 	-- traditional equipment destruction effects
-	-- @param DamageInfo dmginfo
+	-- @param CTakeDamageInfo dmginfo
 	-- @realm server
 	function ENT:OnTakeDamage(dmginfo)
 		if dmginfo:GetAttacker() == self:GetPlacer() and not ttt_damage_own_healthstation:GetBool() then return end
@@ -200,7 +210,7 @@ if SERVER then
 			LANG.Msg(self:GetPlacer(), "hstation_broken")
 		end
 	end
-else -- CLIENT
+else
 	local TryT = LANG.TryTranslation
 	local ParT = LANG.GetParamTranslation
 

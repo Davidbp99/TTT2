@@ -86,7 +86,7 @@ SWEP.Secondary.Delay = 0
 SWEP.Kind = WEAPON_ROLE
 SWEP.CanBuy = nil -- no longer a buyable thing
 SWEP.WeaponID = AMMO_WTESTER
-SWEP.InLoadoutFor = {ROLE_DETECTIVE}
+SWEP.builtin = true
 SWEP.AutoSpawnable = false
 SWEP.NoSights = true
 
@@ -127,12 +127,8 @@ function SWEP:Initialize()
 
 		surface.CreateAdvancedFont("DNAScannerDistanceFont", {font = "Trebuchet24", size = 32, weight = 1200})
 
-		if isfunction(self.AddTTT2HUDHelp) then
-			self:AddTTT2HUDHelp("dna_help_primary", "dna_help_secondary")
-			self:AddHUDHelpLine("dna_help_reload", Key("+reload", "R"))
-		else
-			ErrorNoHalt("[TTT2][ERROR] You are using an add-on that overwrites the 'weapon_tttbase.lua' file while not providing essential functions. That will lead to several incompatibilites.")
-		end
+		self:AddTTT2HUDHelp("dna_help_primary", "dna_help_secondary")
+		self:AddHUDHelpLine("dna_help_reload", Key("+reload", "R"))
 	end
 
 	return self.BaseClass.Initialize(self)
@@ -327,7 +323,7 @@ function SWEP:AddItemSample(ent)
 
 	local owner = self:GetOwner()
 
-	for i = #ent.fingerprints, 1 do
+	for i = #ent.fingerprints, 1, -1 do
 		local ply = ent.fingerprints[i]
 
 		if ply == self:GetOwner() then continue end
@@ -345,11 +341,11 @@ function SWEP:AddItemSample(ent)
 			self.ItemSamples[index] = ply
 			self.CachedTargets[index] = self:GetScanTarget(ply)
 
-			DamageLog("SAMPLE:\t " .. owner:Nick() .. " retrieved DNA of " .. (IsValid(p) and p:Nick() or "<disconnected>") .. " from " .. ent:GetClass())
+			DamageLog("SAMPLE:\t " .. owner:Nick() .. " retrieved DNA of " .. (IsValid(ply) and ply:Nick() or "<disconnected>") .. " from " .. ent:GetClass())
 
 			---
 			-- @realm shared
-			hook.Run("TTTFoundDNA", owner, p, ent)
+			hook.Run("TTTFoundDNA", owner, ply, ent)
 
 			self:Report(true, "dna_object")
 
@@ -441,6 +437,17 @@ if SERVER then
 				net.Send(self:GetOwner())
 			end
 		end
+	end
+
+	---
+	-- Hook that is called for each fingerprint found.
+	-- @param Player finder The finder that used the DNA scanner to find a fingerprint
+	-- @param Player toucher The player whose fingerprint was found, for example the killer
+	-- @param Entity ent The entity where the fingerprint was found
+	-- @hook
+	-- @realm server
+	function GAMEMODE:TTTFoundDNA(finder, toucher, ent)
+
 	end
 else -- CLIENT
 	local TryT = LANG.TryTranslation
@@ -553,6 +560,62 @@ else -- CLIENT
 
 		RADAR.samples = {{pos = self.RadarPos}}
 		RADAR.samples_count = 1
+	end
+
+	---
+	-- @ignore
+	function SWEP:AddToSettingsMenu(parent)
+		local form = vgui.CreateTTT2Form(parent, "header_equipment_additional")
+
+		form:MakeHelp({
+			label = "help_killer_dna_range"
+		})
+
+		form:MakeSlider({
+			serverConvar = "ttt_killer_dna_range",
+			label = "label_killer_dna_range",
+			min = 0,
+			max = 1000,
+			decimal = 0
+		})
+
+		form:MakeHelp({
+			label = "help_killer_dna_basetime"
+		})
+
+		form:MakeSlider({
+			serverConvar = "ttt_killer_dna_basetime",
+			label = "label_killer_dna_basetime",
+			min = 0,
+			max = 200,
+			decimal = 0
+		})
+
+		form:MakeSlider({
+			serverConvar = "ttt2_dna_scanner_slots",
+			label = "label_dna_scanner_slots",
+			min = 0,
+			max = 10,
+			decimal = 0
+		})
+
+		form:MakeHelp({
+			label = "help_dna_radar"
+		})
+
+		local enb = form:MakeCheckBox({
+			serverConvar = "ttt2_dna_radar",
+			label = "label_dna_radar"
+		})
+
+		form:MakeSlider({
+			serverConvar = "ttt2_dna_radar_cooldown",
+			label = "label_dna_radar_cooldown",
+			min = 0,
+			max = 60,
+			decimal = 1,
+			master = enb
+		})
 	end
 
 	local function ScannerFeedback()

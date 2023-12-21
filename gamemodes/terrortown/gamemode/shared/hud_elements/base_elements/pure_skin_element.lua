@@ -62,7 +62,7 @@ if CLIENT then
 
 		-- draw text
 		if t then
-			draw.AdvancedText(t, "PureSkinBar", x + 14, y + 1, util.GetDefaultColor(c), TEXT_ALIGN_LEFT, TEXT_ALIGN_LEFT, true, s)
+			draw.AdvancedText(t, "PureSkinBar", x + 14, y + h * 0.5 - 1, util.GetDefaultColor(c), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER, true, s)
 		end
 	end
 
@@ -81,5 +81,33 @@ if CLIENT then
 		[ROUND_PREP] = "round_prep",
 		[ROUND_ACTIVE] = "round_active",
 		[ROUND_POST] = "round_post"
+	}
+
+	HUDELEMENT.SlotIcons = {
+		[WEAPON_MELEE] = Material("vgui/ttt/slot/slot_weapon_melee"),
+		[WEAPON_PISTOL] = Material("vgui/ttt/slot/slot_weapon_pistol"),
+		[WEAPON_HEAVY] = Material("vgui/ttt/slot/slot_weapon_heavy"),
+		[WEAPON_NADE] = Material("vgui/ttt/slot/slot_weapon_nade"),
+		[WEAPON_CARRY] = Material("vgui/ttt/slot/slot_weapon_carry"),
+		[WEAPON_UNARMED] = Material("vgui/ttt/slot/slot_weapon_unarmed"),
+		[WEAPON_SPECIAL] = Material("vgui/ttt/slot/slot_weapon_special"),
+		[WEAPON_EXTRA] = Material("vgui/ttt/slot/slot_weapon_extra"),
+		[WEAPON_CLASS] = Material("vgui/ttt/slot/slot_weapon_class"),
+	}
+
+	HUDELEMENT.BulletIcons = {
+		["357"] = Material("vgui/ttt/ammo/bullet_357"),
+		["Buckshot"] = Material("vgui/ttt/ammo/bullet_buckshot"),
+		["SMG1"] = Material("vgui/ttt/ammo/bullet_smg1"),
+		["Pistol"] = Material("vgui/ttt/ammo/bullet_pistol"),
+		["AlyxGun"] = Material("vgui/ttt/ammo/bullet_alyxgun"),
+	}
+
+	HUDELEMENT.AmmoIcons = {
+		["357"] = Material("vgui/ttt/ammo/box_357"),
+		["Buckshot"] = Material("vgui/ttt/ammo/box_buckshot"),
+		["SMG1"] = Material("vgui/ttt/ammo/box_smg1"),
+		["Pistol"] = Material("vgui/ttt/ammo/box_pistol"),
+		["AlyxGun"] = Material("vgui/ttt/ammo/box_alyxgun"),
 	}
 end

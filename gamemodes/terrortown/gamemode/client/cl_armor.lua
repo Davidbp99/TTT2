@@ -13,7 +13,12 @@ function ARMOR:Initialize()
 			Material("vgui/ttt/perks/hud_armor.png"),
 			Material("vgui/ttt/perks/hud_armor_reinforced.png")
 		},
-		type = "good"
+		type = "good",
+		name = {
+			"item_armor",
+			"item_armor_reinforced"
+		},
+		sidebarDescription = "item_armor_sidebar"
 	})
 end
 
@@ -31,7 +36,7 @@ local function HandleArmorStatusIcons(ply)
 	-- check if reinforced
 	local icon_id = 1
 
-	if not GetGlobalBool("ttt_armor_classic", false) then
+	if GetGlobalBool("ttt_armor_dynamic", false) then
 		icon_id = ply:ArmorIsReinforced() and 2 or 1
 	end
 

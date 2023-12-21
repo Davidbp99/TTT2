@@ -31,7 +31,7 @@ local function UpdateTransferSubmitButton()
 	local client = LocalPlayer()
 	if client:GetCredits() <= 0 then
 		dhelp:SetText(GetTranslation("xfer_no_credits"))
-		dsubmit:SetDisabled(true)
+		dsubmit:SetEnabled(false)
 	elseif selected_sid then
 		local ply = player.GetBySteamID64(selected_sid)
 
@@ -40,9 +40,9 @@ local function UpdateTransferSubmitButton()
 		local allow, msg = hook.Run("TTT2CanTransferCredits", client, ply, CREDITS_PER_XFER)
 
 		if allow == false then
-			dsubmit:SetDisabled(true)
+			dsubmit:SetEnabled(false)
 		else
-			dsubmit:SetDisabled(false)
+			dsubmit:SetEnabled(true)
 		end
 
 		if isstring(msg) then
@@ -71,7 +71,7 @@ function CreateTransferMenu(parent)
 
 	dsubmit = vgui.Create("DButton", dform)
 	dsubmit:SetSize(bw, bh)
-	dsubmit:SetDisabled(true)
+	dsubmit:SetEnabled(false)
 	dsubmit:SetText(GetTranslation("xfer_send"))
 
 	--Add the help button. Change its text dynamically to match the situation.
@@ -88,9 +88,14 @@ function CreateTransferMenu(parent)
 	end
 
 	dpick:SetWide(250)
+	dpick:SetSortItems(false)
 
 	-- fill combobox
 	local plys = player.GetAll()
+
+	table.sort(plys, function (a, b)
+		return a:IsInTeam(client) and not b:IsInTeam(client)
+	end)
 
 	for i = 1, #plys do
 		local ply = plys[i]
@@ -99,7 +104,13 @@ function CreateTransferMenu(parent)
 		--SteamID64() returns nil for bots on the client, and so credits can't be transferred to them.
 		--Transfers can be made to players who have died (as the sender may not know if they're alive), but can't be made to spectators who joined in the middle of a match.
 		if ply ~= client and (ply:IsTerror() or ply:IsDeadTerror()) and sid then
-			dpick:AddChoice(ply:Nick(), sid)
+			local choiceText = ply:Nick()
+
+			if ply:IsInTeam(client) then
+				choiceText = choiceText .. " (" .. GetTranslation("xfer_team_indicator") .. ")"
+			end
+
+			dpick:AddChoice(choiceText, sid)
 		end
 	end
 

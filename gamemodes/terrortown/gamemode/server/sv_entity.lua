@@ -1,5 +1,5 @@
 ---
--- @ref https://wiki.garrysmod.com/page/Category:Entity
+-- @ref https://wiki.facepunch.com/gmod/Entity
 -- @class Entity
 
 local safeCollisionGroups = {
@@ -44,4 +44,24 @@ end
 -- @realm server
 function entmeta:HasPassableCollisionGrup()
 	return safeCollisionGroups[self:GetCollisionGroup()]
+end
+
+local oldSpawn = entmeta.Spawn
+
+---
+-- Initializes the entity and starts its networking. If called on a player, it will respawn them.
+-- @note This extends the GMod Spawn function and spawns the player at a spawn point. Use @{Player:Respawn}
+-- or @{Player:SpawnForRound} if you want to (re-)spawn the player.
+-- @realm server
+function entmeta:Spawn()
+	if self:IsPlayer() then
+		local spawnPoint = plyspawn.GetRandomSafePlayerSpawnPoint(self)
+
+		if spawnPoint then
+			self:SetPos(spawnPoint.pos)
+			self:SetAngles(spawnPoint.ang)
+		end
+	end
+
+	oldSpawn(self)
 end

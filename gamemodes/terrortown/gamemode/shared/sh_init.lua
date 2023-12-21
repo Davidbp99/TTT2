@@ -1,11 +1,11 @@
 ---
 -- This file contains all shared vars, tables and functions
 
-GM.Name = "TTT2 (Advanced Update)"
-GM.Author = "Bad King Urgrain, Alf21, saibotk, Mineotopia, LeBroomer, Histalek"
+GM.Name = "TTT2"
+GM.Author = "Bad King Urgrain, Alf21, saibotk, Mineotopia, LeBroomer, Histalek, ZenBre4ker"
 GM.Email = "ttt2@neoxult.de"
 GM.Website = "ttt.badking.net, docs.ttt2.neoxult.de"
-GM.Version = "0.8.2b"
+GM.Version = "0.12.2b"
 GM.Customized = true
 
 TTT2 = true -- identifier for TTT2. Just use "if TTT2 then ... end"
@@ -116,15 +116,19 @@ TEAMS = TEAMS or {
 
 ACTIVEROLES = ACTIVEROLES or {}
 
----
--- @realm shared
-local ttt2_custom_models = CreateConVar("ttt2_custom_models", "1", {FCVAR_NOTIFY, FCVAR_ARCHIVE, FCVAR_REPLICATED})
-
 SHOP_DISABLED = "DISABLED"
 SHOP_UNSET = "UNSET"
 
+-- don't block the winning condition during the revival process
+REVIVAL_BLOCK_NONE = 0
+-- only block the winning condition, if the player being alive would change the outcome
+REVIVAL_BLOCK_AS_ALIVE = 1
+-- block the winning condition until the revival process is ended
+REVIVAL_BLOCK_ALL = 2
+
+REVIVAL_BITS = 2
+
 -- if you add roles that can shop, modify DefaultEquipment at the end of this file
--- TODO combine DefaultEquipment[x] and GetRoles()[x] !
 
 -- just compatibality functions
 
@@ -461,6 +465,32 @@ WEAPON_ROLE = WEAPON_EXTRA
 WEAPON_NONE = WEAPON_EXTRA
 WEAPON_EQUIP = WEAPON_SPECIAL
 
+-- weapon spawn type
+WEAPON_TYPE_RANDOM = 1
+WEAPON_TYPE_MELEE = 2
+WEAPON_TYPE_NADE = 3
+WEAPON_TYPE_SHOTGUN = 4
+WEAPON_TYPE_HEAVY = 5
+WEAPON_TYPE_SNIPER = 6
+WEAPON_TYPE_PISTOL = 7
+WEAPON_TYPE_SPECIAL = 8
+
+-- ammo spawn type
+AMMO_TYPE_RANDOM = 1
+AMMO_TYPE_DEAGLE = 2
+AMMO_TYPE_PISTOL = 3
+AMMO_TYPE_MAC10 = 4
+AMMO_TYPE_RIFLE = 5
+AMMO_TYPE_SHOTGUN = 6
+
+-- player spawn types
+PLAYER_TYPE_RANDOM = 1
+
+-- spawn types
+SPAWN_TYPE_WEAPON = 1
+SPAWN_TYPE_AMMO = 2
+SPAWN_TYPE_PLAYER = 3
+
 -- Kill types discerned by last words
 KILL_NORMAL = 0
 KILL_SUICIDE = 1
@@ -481,6 +511,11 @@ MUTE_TERROR = 1
 MUTE_ALL = 2
 MUTE_SPEC = 1002 -- TODO why not 3?
 
+-- Drop On Death override types
+DROP_ON_DEATH_TYPE_DEFAULT = 0
+DROP_ON_DEATH_TYPE_FORCE = 1
+DROP_ON_DEATH_TYPE_DENY = 2
+
 COLOR_WHITE = Color(255, 255, 255, 255)
 COLOR_BLACK = Color(0, 0, 0, 255)
 COLOR_GREEN = Color(0, 255, 0, 255)
@@ -498,8 +533,10 @@ COLOR_OLIVE = Color(100, 100, 0, 255)
 COLOR_BROWN = Color(70, 45, 10)
 COLOR_LBROWN = Color(135, 105, 70)
 COLOR_WARMGRAY = Color(91, 94, 99, 255)
+COLOR_GOLD = Color(255, 215, 30)
 
-include("includes/modules/pon.lua")
+-- include independent libraries (other extensions might require them)
+include("ttt2/libraries/pon.lua")
 
 -- include extensions
 include("ttt2/extensions/math.lua")
@@ -510,8 +547,15 @@ include("ttt2/extensions/table.lua")
 include("ttt2/extensions/util.lua")
 include("ttt2/extensions/surface.lua")
 include("ttt2/extensions/draw.lua")
+include("ttt2/extensions/input.lua")
+include("ttt2/extensions/cvars.lua")
 
 -- include libraries
+include("ttt2/libraries/fastutf8.lua")
+include("ttt2/libraries/huds.lua")
+include("ttt2/libraries/hudelements.lua")
+include("ttt2/libraries/items.lua")
+include("ttt2/libraries/bind.lua")
 include("ttt2/libraries/fileloader.lua")
 include("ttt2/libraries/classbuilder.lua")
 include("ttt2/libraries/fonts.lua")
@@ -521,6 +565,7 @@ include("ttt2/libraries/vguihandler.lua")
 include("ttt2/libraries/vskin.lua")
 include("ttt2/libraries/door.lua")
 include("ttt2/libraries/orm.lua")
+include("ttt2/libraries/database.lua")
 include("ttt2/libraries/marks.lua")
 include("ttt2/libraries/outline.lua")
 include("ttt2/libraries/thermalvision.lua")
@@ -529,6 +574,10 @@ include("ttt2/libraries/events.lua")
 include("ttt2/libraries/eventdata.lua")
 include("ttt2/libraries/none.lua")
 include("ttt2/libraries/targetid.lua")
+include("ttt2/libraries/playermodels.lua")
+include("ttt2/libraries/entspawnscript.lua")
+include("ttt2/libraries/bodysearch.lua")
+include("ttt2/libraries/keyhelp.lua")
 
 -- include ttt required files
 ttt_include("sh_decal")
@@ -539,6 +588,7 @@ ttt_include("sh_hudelement_module")
 ttt_include("sh_equip_items")
 ttt_include("sh_role_module")
 ttt_include("sh_item_module")
+ttt_include("sh_playerclass")
 
 ---
 -- Returns the equipment's file name
@@ -580,28 +630,6 @@ end
 -- Create teams
 TEAM_TERROR = 1
 TEAM_SPEC = TEAM_SPECTATOR
-
--- Everyone's model
-local ttt_playermodels = {
-	Model("models/player/phoenix.mdl"),
-	Model("models/player/arctic.mdl"),
-	Model("models/player/guerilla.mdl"),
-	Model("models/player/leet.mdl")
-}
-
-local ttt_playermodels_count = #ttt_playermodels
-
----
--- Returns a random player model
--- @return Model model
--- @realm shared
-function GetRandomPlayerModel()
-	if not ttt2_custom_models:GetBool() then
-		return ttt_playermodels[math.random(ttt_playermodels_count)]
-	else
-		return ttt_playermodels[1]
-	end
-end
 
 ---
 -- Returns the default equipment

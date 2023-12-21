@@ -39,7 +39,7 @@ function ENT:KeyValue(key, value)
 		self.Receiver = tonumber(value)
 
 		if not self.Receiver or self.Receiver < 0 or self.Receiver > 5 then
-			ErrorNoHalt("ERROR: ttt_game_text has invalid receiver value\n")
+			ErrorNoHalt("ERROR: ttt_game_text has invalid inputReceiver value\n")
 
 			self.Receiver = RECEIVE_ACTIVATOR
 		end
@@ -52,30 +52,38 @@ end
 -- @return[default=true] boolean
 -- @realm shared
 function ENT:AcceptInput(name, activator)
-	if name == "Display" then
-		local recv = activator
-
-		local r = self.Receiver
-		if r == RECEIVE_ALL then
-			recv = nil
-		elseif r == RECEIVE_DETECTIVE then
-			recv = GetRoleChatFilter(ROLE_DETECTIVE)
-		elseif r == RECEIVE_TRAITOR then
-			recv = GetTeamChatFilter(TEAM_TRAITOR)
-		elseif r == RECEIVE_INNOCENT then
-			recv = GetTeamChatFilter(TEAM_INNOCENT)
-		elseif r == RECEIVE_ACTIVATOR then
-			if not IsValid(activator) or not activator:IsPlayer() then
-				ErrorNoHalt("ttt_game_text tried to show message to invalid !activator\n")
-
-				return true
-			end
-		elseif r == RECEIVE_CUSTOMROLE and self.teamReceiver then
-			recv = GetTeamChatFilter(self.teamReceiver)
-		end
-
-		CustomMsg(recv, self.Message, self.Color)
-
-		return true
+	if name ~= "Display" then
+		return false
 	end
+
+	local inputReceiver = self.Receiver
+	local messageReceiver = activator
+
+	if inputReceiver == RECEIVE_ALL then
+		messageReceiver = nil
+	elseif inputReceiver == RECEIVE_DETECTIVE then
+		messageReceiver = GetRoleChatFilter(ROLE_DETECTIVE)
+	elseif inputReceiver == RECEIVE_TRAITOR then
+		messageReceiver = GetTeamChatFilter(TEAM_TRAITOR)
+	elseif inputReceiver == RECEIVE_INNOCENT then
+		-- TTT originally defined this as "All except traitors" even though it is labeled as "RECEIVE_INNOCENT",
+		-- but the implementation literally only checked that a player was not a traitor, therefore the intent is
+		-- preserved here since maps aren't likely to be updated
+		messageReceiver = GetPlayerFilter(function(p)
+			local plyRoleData = ply:GetSubRoleData()
+			return p:GetTeam() ~= TEAM_TRAITOR and not plyRoleData.disabledTeamChatRecv
+		end)
+	elseif inputReceiver == RECEIVE_ACTIVATOR then
+		if not IsValid(activator) or not activator:IsPlayer() then
+			ErrorNoHalt("ttt_game_text tried to show message to invalid !activator\n")
+
+			return true
+		end
+	elseif inputReceiver == RECEIVE_CUSTOMROLE and self.teamReceiver then
+		messageReceiver = GetTeamChatFilter(self.teamReceiver)
+	end
+
+	CustomMsg(messageReceiver, self.Message, self.Color)
+
+	return true
 end

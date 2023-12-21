@@ -15,6 +15,10 @@ local ttt_bots_are_spectators = CreateConVar("ttt_bots_are_spectators", "0", {FC
 
 ---
 -- @realm server
+local ttt2_bots_lock_on_death = CreateConVar("ttt2_bots_lock_on_death", "0", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
+
+---
+-- @realm server
 local ttt_dyingshot = CreateConVar("ttt_dyingshot", "0", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
 
 ---
@@ -102,6 +106,14 @@ end
 -- @ref https://wiki.facepunch.com/gmod/GM:PlayerSpawn
 -- @local
 function GM:PlayerSpawn(ply)
+	player_manager.SetPlayerClass(ply, "player_ttt")
+
+	-- reset any cached weapons
+	ply:ResetCachedWeapons()
+
+	-- Allow bots to wander again.
+	if ply:IsBot() then ply:UnLock() end
+
 	-- stop bleeding
 	util.StopBleeding(ply)
 
@@ -199,18 +211,19 @@ function GM:IsSpawnpointSuitable(ply, spawnEntity, force)
 		return true
 	end
 
-	return spawn.IsSpawnPointSafe(ply, spawnEntity:GetPos(), force)
+	return plyspawn.IsSpawnPointSafe(ply, spawnEntity:GetPos(), force)
 end
 
 ---
 -- Returns a list of all spawnable @{Entity}
 -- @param boolean shuffle whether the table should be shuffled
--- @param boolean force_all used unless absolutely necessary (includes info_player_start spawns)
+-- @param boolean forceAll used unless absolutely necessary (includes info_player_start spawns)
 -- @return table
--- @deprecated Use @{spawn.GetPlayerSpawnEntities} instead
+-- @deprecated Use @{plyspawn.GetPlayerSpawnPoints} instead
 -- @realm server
 function GetSpawnEnts(shouldShuffle, forceAll)
-	local spawnEntities = spawn.GetPlayerSpawnEntities(forceAll)
+	-- forceAll is ignored because the new system doesn't use it anymore
+	local spawnEntities = plyspawn.GetPlayerSpawnPoints()
 
 	if shouldShuffle then
 		table.Shuffle(spawnEntities)
@@ -221,14 +234,18 @@ end
 
 ---
 -- Called to determine a spawn point for a @{Player} to spawn at.
+-- @note This hook is not used to determine the spawn point of the player.
 -- @param Player ply The @{Player} who needs a spawn point
+-- @param boolean transition If true, the player just spawned from a map transition (trigger_changelevel);
+-- you probably want to not return an entity for that case to not override player's position
 -- @return Entity The spawnpoint entity to spawn the @{Player} at
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:PlayerSelectSpawn
 -- @local
-function GM:PlayerSelectSpawn(ply)
-	return spawn.GetRandomPlayerSpawnEntity(ply)
+function GM:PlayerSelectSpawn(ply, transition)
+	-- this overwrite is needed to suppress the GMod warning if no spawn entities were found
+	-- "[PlayerSelectSpawn] Error! No spawn points!"
 end
 
 ---
@@ -242,11 +259,13 @@ end
 -- @ref https://wiki.facepunch.com/gmod/GM:PlayerSetModel
 -- @local
 function GM:PlayerSetModel(ply)
+	-- The player modes has to be applied here since some player model selectors overwrite
+	-- this hook to suppress the TTT2 player models. If the model is assigned elsewhere, it
+	-- breaks with external model selectors.
 	if not IsValid(ply) then return end
 
-	local mdl = ply.defaultModel or GAMEMODE.force_plymodel == "" and GetRandomPlayerModel() or GAMEMODE.force_plymodel
-
-	ply:SetModel(mdl) -- this will call the overwritten internal function to modify the model
+	-- this will call the overwritten internal function to modify the model
+	ply:SetModel(ply.defaultModel or GAMEMODE.playermodel)
 
 	-- Always clear color state, may later be changed in TTTPlayerSetColor
 	ply:SetColor(COLOR_WHITE)
@@ -350,16 +369,27 @@ end
 -- from this hook will not be networked to the client, so make sure to do that on both realms
 -- @predicted
 -- @param Player ply The @{Player} pressing the key. If running client-side, this will always be @{LocalPlayer}
--- @param number key The key that the @{Player} pressed using <a href="https://wiki.garrysmod.com/page/Enums/IN">IN_Enums</a>.
+-- @param number key The key that the @{Player} pressed using <a href="https://wiki.facepunch.com/gmod/Enums/IN">IN_Enums</a>.
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:KeyPress
 -- @local
 function GM:KeyPress(ply, key)
-	if not IsValid(ply) then return end
+	if not IsValid(ply) or util.EditingModeActive(ply) then return end
 
 	-- Spectator keys
 	if not ply:IsSpec() or ply:GetRagdollSpec() then return end
+
+	if entspawnscript.IsEditing(ply) then
+		return
+	end
+
+	-- Do not allow the spectator to gather information if they're about to revive.
+	if ply:IsReviving() then
+		LANG.Msg(ply, "spec_about_to_revive", nil, MSG_MSTACK_WARN)
+
+		return
+	end
 
 	if ply.propspec then
 		return PROPSPEC.Key(ply, key)
@@ -368,31 +398,44 @@ function GM:KeyPress(ply, key)
 	ply:ResetViewRoll()
 
 	if key == IN_ATTACK then
-		-- snap to random guy
-		ply:Spectate(OBS_MODE_ROAMING)
-		ply:SetEyeAngles(angle_zero) -- After exiting propspec, this could be set to awkward values
-		ply:SpectateEntity(nil)
+		local tgt = ply:GetObserverTarget()
 
-		local alive = util.GetAlivePlayers()
+		if IsValid(tgt) and tgt:IsPlayer() then
+			local target = util.GetPreviousAlivePlayer(tgt)
 
-		local alive_count = #alive
-		if alive_count < 1 then return end
-
-		local target = alive[math.random(alive_count)]
-
-		if IsValid(target) then
-			--ply:SetPos(target:EyePos())
-			--ply:SetEyeAngles(target:EyeAngles())
-			ply:Spectate(OBS_MODE_IN_EYE)
-			ply:SpectateEntity(target)
+			if IsValid(target) then
+				ply:Spectate(ply.spec_mode or OBS_MODE_IN_EYE)
+				ply:SpectateEntity(target)
+			end
 		end
 	elseif key == IN_ATTACK2 then
-		-- spectate either the next guy or a random guy in chase
-		local target = util.GetNextAlivePlayer(ply:GetObserverTarget())
+		local tgt = ply:GetObserverTarget()
 
-		if IsValid(target) then
-			ply:Spectate(ply.spec_mode or OBS_MODE_IN_EYE)
-			ply:SpectateEntity(target)
+		if IsValid(tgt) and tgt:IsPlayer() then
+			local target = util.GetNextAlivePlayer(tgt)
+
+			if IsValid(target) then
+				ply:Spectate(ply.spec_mode or OBS_MODE_IN_EYE)
+				ply:SpectateEntity(target)
+			end
+		else
+			-- when not focused yet, snap to random guy
+			ply:UnSpectate()
+			ply:Spectate(OBS_MODE_ROAMING)
+			ply:SetEyeAngles(angle_zero) -- After exiting propspec, this could be set to awkward values
+
+			local alive = util.GetAlivePlayers()
+
+			local alive_count = #alive
+			if alive_count < 1 then return end
+
+			---@cast alive -nil
+			local target = alive[math.random(alive_count)]
+
+			if IsValid(target) then
+				ply:Spectate(OBS_MODE_IN_EYE)
+				ply:SpectateEntity(target)
+			end
 		end
 	elseif key == IN_DUCK then
 		local pos = ply:GetPos()
@@ -408,8 +451,8 @@ function GM:KeyPress(ply, key)
 		end
 
 		-- reset
+		ply:UnSpectate()
 		ply:Spectate(OBS_MODE_ROAMING)
-		ply:SpectateEntity(nil)
 
 		ply:SetPos(pos)
 		ply:SetEyeAngles(ang)
@@ -441,7 +484,7 @@ end
 -- For a more general purpose @{function} that handles all kinds of input, see @{GM:PlayerButtonUp}
 -- @predicted
 -- @param Player ply The @{Player} pressing the key. If running client-side, this will always be @{LocalPlayer}
--- @param number key The key that the @{Player} pressed using <a href="https://wiki.garrysmod.com/page/Enums/IN">IN_Enums</a>.
+-- @param number key The key that the @{Player} pressed using <a href="https://wiki.facepunch.com/gmod/Enums/IN">IN_Enums</a>.
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:KeyRelease
@@ -484,6 +527,13 @@ end
 local function SpecUseKey(ply, cmd, arg)
 	if not IsValid(ply) or not ply:IsSpec() then return end
 
+	-- Do not allow the spectator to gather information if they're about to revive.
+	if ply:IsReviving() then
+		LANG.Msg(ply, "spec_about_to_revive", nil, MSG_MSTACK_WARN)
+
+		return
+	end
+
 	-- longer range than normal use
 	local tr = util.QuickTrace(ply:GetShootPos(), ply:GetAimVector() * 128, ply)
 
@@ -506,7 +556,7 @@ end
 concommand.Add("ttt_spec_use", SpecUseKey)
 
 ---
--- Called when a @{Player} leaves the server. See the <a href="https://wiki.garrysmod.com/page/Game_Events">player_disconnect gameevent</a> for a shared version of this hook.
+-- Called when a @{Player} leaves the server. See the <a href="https://wiki.facepunch.com/gmod/gameevent/player_disconnect">player_disconnect gameevent</a> for a shared version of this hook.
 -- @param Player ply
 -- @hook
 -- @realm server
@@ -584,98 +634,6 @@ local function PlayDeathSound(victim)
 end
 
 ---
--- See if we should award credits now
-local function CheckCreditAward(victim, attacker)
-	if GetRoundState() ~= ROUND_ACTIVE then return end
-
-	if not IsValid(victim) then return end
-
-	if not IsValid(attacker) or not attacker:IsPlayer() or not attacker:IsActive() then return end
-
-	---
-	-- @realm server
-	local ret = hook.Run("TTT2CheckCreditAward", victim, attacker)
-	if ret == false then return end
-
-	local rd = attacker:GetSubRoleData()
-
-	-- DET KILLED ANOTHER TEAM AWARD
-	if attacker:GetBaseRole() == ROLE_DETECTIVE and not victim:IsInTeam(attacker) then
-		local amt = math.ceil(ConVarExists("ttt_" .. rd.abbr .. "_credits_traitordead") and GetConVar("ttt_" .. rd.abbr .. "_credits_traitordead"):GetInt() or 1)
-
-		if amt > 0 then
-			local plys = player.GetAll()
-
-			for i = 1, #plys do
-				local ply = plys[i]
-
-				if ply:IsActive() and ply:IsShopper() and ply:GetBaseRole() == ROLE_DETECTIVE then
-					ply:AddCredits(amt)
-				end
-			end
-
-			LANG.Msg(GetRoleChatFilter(ROLE_DETECTIVE, true), "credit_all", {num = amt})
-		end
-	end
-
-	-- TRAITOR AWARD
-	if (attacker:GetTeam() == TEAM_TRAITOR or rd.traitorCreditAward) and not victim:IsInTeam(attacker) and (not GAMEMODE.AwardedCredits or GetConVar("ttt_credits_award_repeat"):GetBool()) then
-		local terror_alive = 0
-		local terror_dead = 0
-		local terror_total = 0
-
-		local plys = player.GetAll()
-
-		for i = 1, #plys do
-			local ply = plys[i]
-
-			if ply:IsInTeam(attacker) then continue end
-
-			if ply:IsTerror() then
-				terror_alive = terror_alive + 1
-			elseif ply:IsDeadTerror() then
-				terror_dead = terror_dead + 1
-			end
-		end
-
-		-- we check this at the death of an innocent who is still technically
-		-- Alive(), so add one to dead count and sub one from living
-		terror_dead = terror_dead + 1
-		terror_alive = math.max(terror_alive - 1, 0)
-		terror_total = terror_dead + terror_alive
-
-		-- Only repeat-award if we have reached the pct again since last time
-		if GAMEMODE.AwardedCredits then
-			terror_dead = terror_dead - GAMEMODE.AwardedCreditsDead
-		end
-
-		local pct = terror_dead / terror_total
-
-		if not ConVarExists("ttt_credits_award_pct") or pct >= GetConVar("ttt_credits_award_pct"):GetFloat() then
-			-- Traitors have killed sufficient people to get an award
-			local amt = math.ceil(ConVarExists("ttt_credits_award_size") and GetConVar("ttt_credits_award_size"):GetFloat() or 0)
-
-			-- If size is 0, awards are off
-			if amt > 0 then
-				for k = 1, #plys do
-					local ply = plys[k]
-
-					if ply:IsActive() and ply:IsShopper() and ply:IsInTeam(attacker) and not ply:GetSubRoleData().preventKillCredits then
-						ply:AddCredits(amt)
-
-						--LANG.Msg(GetRoleTeamFilter(TEAM_TRAITOR, true), "credit_kill_all", {num = amt})
-						LANG.Msg(ply, "credit_all", {num = amt}, MSG_MSTACK_ROLE)
-					end
-				end
-			end
-
-			GAMEMODE.AwardedCredits = true
-			GAMEMODE.AwardedCreditsDead = terror_dead + GAMEMODE.AwardedCreditsDead
-		end
-	end
-end
-
----
 -- Handles the @{Player}'s death.<br />
 -- This hook is not called if the @{Player} is killed by @{Player:KillSilent}.
 -- See @{GM:PlayerSilentDeath} for that.
@@ -686,12 +644,19 @@ end
 -- @note @{Player:Alive} returns true when this is called
 -- @param Player ply
 -- @param Player|Entity attacker @{Player} or @{Entity} that killed the @{Player}
--- @param DamageInfo dmginfo
+-- @param CTakeDamageInfo dmginfo
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:DoPlayerDeath
 -- @local
 function GM:DoPlayerDeath(ply, attacker, dmginfo)
+	if entspawnscript.IsEditing(ply) then
+		entspawnscript.StopEditing(ply)
+	end
+
+	-- Prevent bots from wandering and creating logspam.
+	if ply:IsBot() and ttt2_bots_lock_on_death:GetBool() then ply:Lock() end
+
 	if ply:IsSpec() then return end
 
 	-- Experimental: Fire a last shot if ironsighting and not headshot
@@ -729,7 +694,7 @@ function GM:DoPlayerDeath(ply, attacker, dmginfo)
 	-- Create ragdoll and hook up marking effects
 	local rag = CORPSE.Create(ply, attacker, dmginfo)
 
-	ply.server_ragdoll = rag -- nil if clientside
+	ply.server_ragdoll = rag
 
 	CreateDeathEffect(ply, false)
 
@@ -760,44 +725,12 @@ function GM:DoPlayerDeath(ply, attacker, dmginfo)
 
 	-- headshots, knife damage, and weapons tagged as silent all prevent death
 	-- sound from occurring
+	---@cast killwep -nil
 	if not ply.was_headshot and not dmginfo:IsDamageType(DMG_SLASH) and not (IsValid(killwep) and killwep.IsSilent) then
 		PlayDeathSound(ply)
 	end
 
-	-- Credits
-	CheckCreditAward(ply, attacker)
-
-	-- Check for TEAM killing ANOTHER TEAM to send credit rewards
-	if IsValid(attacker) and attacker:IsPlayer() and attacker:IsShopper() then
-		local reward = 0
-		local rd = attacker:GetSubRoleData()
-
-		-- if traitor team kills another team
-		if attacker:IsActive() and attacker:IsShopper() and not attacker:IsInTeam(ply) then
-			if attacker:GetTeam() == TEAM_TRAITOR then
-				reward = math.ceil(ConVarExists("ttt_credits_" .. rd.name .. "kill") and GetConVar("ttt_credits_" .. rd.name .. "kill"):GetInt() or 0)
-			else
-				local vrd = ply:GetSubRoleData()
-				local b = false
-
-				if vrd ~= TRAITOR then
-					b = ConVarExists("ttt_" .. rd.name .. "_credits_" .. vrd.name .. "kill")
-				end
-
-				if b then -- special role killing award
-					reward = math.ceil(ConVarExists("ttt_" .. rd.name .. "_credits_" .. vrd.name .. "kill") and GetConVar("ttt_" .. rd.name .. "_credits_" .. vrd.name .. "kill"):GetInt() or 0)
-				else -- give traitor killing award if killing another role
-					reward = math.ceil(ConVarExists("ttt_" .. rd.name .. "_credits_" .. roles.TRAITOR.name .. "kill") and GetConVar("ttt_" .. rd.name .. "_credits_" .. roles.TRAITOR.name .. "kill"):GetInt() or 0)
-				end
-			end
-		end
-
-		if reward > 0 then
-			attacker:AddCredits(reward)
-
-			LANG.Msg(attacker, "credit_kill", {num = reward, role = LANG.NameParam(ply:GetRoleString())}, MSG_MSTACK_ROLE) -- TODO rework
-		end
-	end
+	credits.HandleKillCreditsAward(ply, attacker)
 end
 
 ---
@@ -809,7 +742,7 @@ end
 -- </ul>
 -- See @{Player:LastHitGroup} if you need to get the last hit hitgroup of the @{Player}.
 -- @note @{Player:Alive} will return true in this hook
--- @param Player victom The @{Player} who died
+-- @param Player victim The @{Player} who died
 -- @param Entity infl @{Entity} used to kill the victim
 -- @param Player|Entity attacker @{Player} or @{Entity} that killed the victim
 -- @hook
@@ -972,8 +905,8 @@ function GM:SpectatorThink(ply)
 		if IsValid(tgt) and tgt:IsPlayer() then
 			if not tgt:IsTerror() or not tgt:Alive() then
 				-- stop speccing as soon as target dies
+				ply:UnSpectate()
 				ply:Spectate(OBS_MODE_ROAMING)
-				ply:SpectateEntity(nil)
 			elseif GetRoundState() == ROUND_ACTIVE then
 				-- Sync position to target. Uglier than parenting, but unlike
 				-- parenting this is less sensitive to breakage: if we are
@@ -997,10 +930,10 @@ GM.PlayerDeathThink = GM.SpectatorThink
 -- Called when a @{Player} has been hit by a trace and damaged (such as from a bullet).
 -- Returning true overrides the damage handling and prevents @{GM:ScalePlayerDamage} from being called.
 -- @param Player ply The @{Player} that has been hit
--- @param DamageInfo dmginfo The damage info of the bullet
+-- @param CTakeDamageInfo dmginfo The damage info of the bullet
 -- @param Vector dir Normalized vector direction of the bullet's path
 -- @param table trace The trace of the bullet's path, see
--- <a href="https://wiki.garrysmod.com/page/Structures/TraceResult">TraceResult structure</a>
+-- <a href="https://wiki.facepunch.com/gmod/Structures/TraceResult">TraceResult structure</a>
 -- @return boolean Override engine handling
 -- @hook
 -- @realm server
@@ -1019,7 +952,7 @@ end
 ---
 -- Called when a @{Player} has been hurt by an explosion. Override to disable default sound effect.
 -- @param Player ply @{Player} who has been hurt
--- @param DamageInfo dmginfo Damage info from explsion
+-- @param CTakeDamageInfo dmginfo Damage info from explsion
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:OnDamagedByExplosion
@@ -1034,8 +967,8 @@ end
 -- so you should use @{GM:EntityTakeDamage} instead if you need to detect ALL damage.
 -- @param Player ply The @{Player} taking damage
 -- @param number hitgroup The hitgroup where the @{Player} took damage. See
--- <a href="https://wiki.garrysmod.com/page/Enums/HITGROUP">HITGROUP_Enums</a>
--- @param DamageInfo dmginfo The damage info
+-- <a href="https://wiki.facepunch.com/gmod/Enums/HITGROUP">HITGROUP_Enums</a>
+-- @param CTakeDamageInfo dmginfo The damage info
 -- @return boolean Return true to prevent damage that this hook is called for, stop blood particle effects and blood decals.<br />
 -- It is possible to return true only on client ( This will work only in multiplayer ) to stop the effects but still take damage.
 -- @hook
@@ -1057,6 +990,7 @@ function GM:ScalePlayerDamage(ply, hitgroup, dmginfo)
 		local wep = util.WeaponFromDamage(dmginfo)
 
 		if IsValid(wep) then
+			---@cast wep -nil
 			local s = wep:GetHeadshotMultiplier(ply, dmginfo) or 2
 
 			dmginfo:ScaleDamage(s)
@@ -1104,6 +1038,18 @@ local fallsounds = {
 local fallsounds_count = #fallsounds
 
 ---
+-- @realm server
+local falldmg_enable = CreateConVar("ttt2_falldmg_enable", "1", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
+
+---
+-- @realm server
+local falldmg_min_vel = CreateConVar("ttt2_falldmg_min_velocity", "450", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
+
+---
+-- @realm server
+local falldmg_expo = CreateConVar("ttt2_falldmg_exponent", "1.75", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
+
+---
 -- Called when a @{Player} makes contact with the ground.
 -- @predicted
 -- @param Player ply
@@ -1116,13 +1062,12 @@ local fallsounds_count = #fallsounds
 -- @ref https://wiki.facepunch.com/gmod/GM:OnPlayerHitGround
 -- @local
 function GM:OnPlayerHitGround(ply, in_water, on_floater, speed)
-	if in_water or speed < 450 or not IsValid(ply) then return end
+	if not falldmg_enable:GetBool() or not IsValid(ply) or in_water or speed < falldmg_min_vel:GetInt() then return end
 
 	-- Everything over a threshold hurts you, rising exponentially with speed
-	local damage = math.pow(0.05 * (speed - 420), 1.75)
+	local damage = math.pow(0.05 * (speed - (falldmg_min_vel:GetInt() - 30)), falldmg_expo:GetFloat())
 
-	-- I don't know exactly when on_floater is true, but it's probably when
-	-- landing on something that is in water.
+	-- Halve damage dealt if the impacted object is floating on water
 	if on_floater then
 		damage = damage * 0.5
 	end
@@ -1186,20 +1131,9 @@ end
 local ttt_postdm = CreateConVar("ttt_postround_dm", "0", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
 
 ---
--- Returns whether PVP is allowed
--- @return boolean
--- @hook
--- @realm server
-function GM:AllowPVP()
-	local rs = GetRoundState()
-
-	return rs ~= ROUND_PREP and (rs ~= ROUND_POST or ttt_postdm:GetBool())
-end
-
----
 -- Called when an entity takes damage. You can modify all parts of the damage info in this hook.
 -- @param Entity ent The @{Entity} taking damage
--- @param DamageInfo dmginfo Damage info
+-- @param CTakeDamageInfo dmginfo Damage info
 -- @return boolean Return true to completely block the damage event
 -- @note e.g. no damage during prep, etc
 -- @hook
@@ -1252,7 +1186,7 @@ end
 -- @param Entity infl the inflictor
 -- @param Player|Entity att the attacker
 -- @param number amount amount of damage
--- @param DamageInfo dmginfo Damage info
+-- @param CTakeDamageInfo dmginfo Damage info
 -- @hook
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:EntityTakeDamage
@@ -1408,7 +1342,7 @@ function GM:PlayerTakeDamage(ent, infl, att, amount, dmginfo)
 
 	-- send damage information to client
 	net.Start("ttt2_damage_received")
-	net.WriteFloat(amount)
+	net.WriteFloat(dmginfo:GetDamage())
 	net.Send(ent)
 end
 
@@ -1505,7 +1439,7 @@ end
 -- @note Disable taunts, we don't have a system for them (camera freezing etc).<br />
 -- Mods/plugins that add such a system should override this.
 -- @param Player ply @{Player} who tried to taunt
--- @param number act Act ID of the taunt player tries to do, see <a href="https://wiki.garrysmod.com/page/Enums/ACT">ACT_Enums</a>
+-- @param number act Act ID of the taunt player tries to do, see <a href="https://wiki.facepunch.com/gmod/Enums/ACT">ACT_Enums</a>
 -- @return[default=false] boolean Return false to disallow player taunting
 -- @hook
 -- @realm server
@@ -1513,4 +1447,60 @@ end
 -- @local
 function GM:PlayerShouldTaunt(ply, act)
 	return false
+end
+
+---
+-- Use this hook to prevent the check of the credit award completely.
+-- @param Player victim The player that died
+-- @param Player attacker The player that killed the victim and might receive a credit award
+-- @return nil|boolean Return false to prevent check
+-- @hook
+-- @realm server
+function GM:TTT2CheckCreditAward(victim, attacker)
+
+end
+
+---
+-- Use this hook to prevent the transfer of credits from a body to a player.
+-- @param Entity rag The ragdoll that is inspected
+-- @param Player ply The @{Player} attempting to find credits from ragdoll
+-- @return nil|boolean Return false to prevent transfer
+-- @hook
+-- @realm server
+function GM:TTT2GiveFoundCredits(ply, rag)
+
+end
+
+---
+-- Use this hook to prevent the addition of time to the hastemode.
+-- @param Player victim The player that died
+-- @param Player attacker The player that killed the victim
+-- @return nil|boolean Return true to prevent haste addition
+-- @hook
+-- @realm server
+function GM:TTT2ShouldSkipHaste(victim, attacker)
+
+end
+
+---
+-- Called in @{GM:PlayeDeath} at the very end.
+-- @note @{Player:Alive} will return true in this hook.
+-- @param Player victim The @{Player} who died
+-- @param Entity inflictor @{Entity} used to kill the victim
+-- @param Player|Entity attacker @{Player} or @{Entity} that killed the victim
+-- @hook
+-- @realm server
+function GM:TTT2PostPlayerDeath(victim, inflictor, attacker)
+
+end
+
+---
+-- Returns whether PVP is allowed
+-- @return boolean
+-- @hook
+-- @realm server
+function GM:AllowPVP()
+	local rs = GetRoundState()
+
+	return rs ~= ROUND_PREP and (rs ~= ROUND_POST or ttt_postdm:GetBool())
 end

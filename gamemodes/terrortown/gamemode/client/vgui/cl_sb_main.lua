@@ -79,8 +79,8 @@ function ScoreGroup(ply)
 
 			-- To terrorists, missing players show as alive
 			if client:IsSpec()
-			or client:IsActive() and client:GetTeam() == TEAM_TRAITOR
-			or GetRoundState() ~= ROUND_ACTIVE and client:IsTerror()
+				or client:IsActive() and client:GetSubRoleData().isOmniscientRole
+				or GetRoundState() ~= ROUND_ACTIVE and client:IsTerror()
 			then
 				return GROUP_NOTFOUND
 			else
@@ -179,9 +179,13 @@ function PANEL:Init()
 	self.mapchange:SetContentAlignment(9)
 
 	self.mapchange.Think = function (sf)
-		local r, t = UntilMapChange()
+		if GetGlobalBool("ttt_session_limits_enabled") then
+			local r, t = UntilMapChange()
+			sf:SetText(GetPTranslation("sb_mapchange", {num = r, time = t}))
+		else
+			sf:SetText(GetTranslation("sb_mapchange_disabled"))
+		end
 
-		sf:SetText(GetPTranslation("sb_mapchange", {num = r, time = t}))
 		sf:SizeToContents()
 	end
 
@@ -601,3 +605,35 @@ function PANEL:PerformLayout()
 end
 
 vgui.Register("TTTPlayerFrame", PANEL, "Panel")
+
+---
+-- Called to determine if the player should be listed in a different scoreboard group than they would normally be in.
+-- These correspond to the four groups in the scoreboard of living, dead but not found, confirmed dead, and spectators.
+-- @param Player ply The player whose score group should be modified
+-- @return nil|number The scoregroup, it must be one of: GROUP_TERROR, GROUP_NOTFOUND, GROUP_FOUND, or GROUP_SPEC
+-- @hook
+-- @realm client
+function GM:TTTScoreGroup(ply)
+
+end
+
+---
+-- Called when initializing the scoreboard. In this hook you could add additional panels for new player groups,
+-- combined with @{GM:TTTScoreGroup }to place players in those groups.
+-- @param Panel parent The panel containing the player group panels
+-- @param table playerGroup A table of the player group panels
+-- @hook
+-- @realm client
+function GM:TTTScoreGroups(parent, playerGroup)
+
+end
+
+---
+-- Use this hook to add a new column to the scoreboard. Use @{TTTPlayerFrame:AddColumn}
+-- to add a new column.
+-- @param TTTPlayerFrame panel The player frame panel where a new column can be added
+-- @hook
+-- @realm client
+function GM:TTTScoreboardColumns(panel)
+
+end

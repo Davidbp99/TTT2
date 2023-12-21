@@ -4,6 +4,527 @@ All notable changes to TTT2 will be documented here. Inspired by [keep a changel
 
 ## Unreleased
 
+## [v0.12.2b](https://github.com/TTT-2/TTT2/tree/v0.12.2b) (2023-12-20)
+
+### Added
+
+- Added the beacon back into TTT2, an equipment that was disabled long ago in base TTT
+  - Can only be bought by policing roles
+  - Creates a wallhack in a sphere around it, which is visible to everyone
+- Added recognizable badge for `builtin` equipment and roles (by @EntranceJew)
+  - Buy Equipment menu has `builtin` indicators, replacing the `(C)` custom marker decorating a majority of equipment
+  - `F1 > Edit Equipment` now has `builtin` indicators on equipment
+  - Added tooltip to `F1 > Edit Equipment` menu with the equipment's class name.
+  - `F1 > Role Settings` now has `builtin` indicators for roles
+  - `F1 > Edit Shops` now has `builtin` indicators for roles
+
+### Changed
+
+- Updated the Turkish localization file (by @NovaDiablox)
+- Radio can now only be picked up by placer
+- Radar now clears existing waypoints when removed or on changing role (by @EntranceJew)
+- Comboboxes can now handle numbers and strings as values
+  - Defaults work now with numbers
+  - OnChange-Callback is called with the correct type for ConVars
+
+### Fixed
+
+- Binoculars scan no longer gets interrupted when changing zoom level
+- Fixed missing water level icon breaking scoreboard
+- DNA Tester works now with more than one fingerprint on a weapon
+- TraitorButton config files should now actually work
+- Translation strings not rendering on detective's body search mode combobox
+- C4 defusal prompt now suggesting the right key
+- Disable to unscope from weapons without ironsights
+- Fixed typo preventing targetid from showing role icons correctly
+- Mitigated issue with CTakeDamageInfo becoming ephemeral outside their hook of origin
+- `ttt_game_text` can now properly send to "All except traitors", as described.
+- Fixed corpses not listing their kills
+- Comboboxes now show correct values for database driven entries
+- Database-Callbacks are now called with the correct valuetype
+
+## [v0.12.1b](https://github.com/TTT-2/TTT2/tree/v0.12.1b) (2023-12-12)
+
+### Added
+
+- Added a new `fastutf8` library that provides faster utf8 functions (added by @saibotk, created by @blitmap)
+- Added new hooks: `TTT2MapRegisterWeaponSpawns`, `TTT2MapRegisterAmmoSpawns`, `TTT2MapRegisterPlayerSpawns` to allow converting a wider variety of source map ports (by @EntranceJew)
+
+### Fixed
+
+- Fixed the UI being unable to handle wrapping text with non-utf8 languages that do not use ASCII whitespaces (by @TimGoll & @saibotk)
+- Fixed ttt_game_text not working due to a refactor
+- Fixed dete call HUD being invisible
+- Fixed edgecase where undefined killer angle or pos were accessed
+- Fixed fallback ammo icon missing
+- Fixed a null entity error in the miniscoreboard
+- Fixed missing bodysearch information if victim was killed without leaving a trace caused by a weapon hit
+- Fixed "body_confirm" MSTACK noise by batching all the kills from a body into one message. (by @EntranceJew)
+- Fixed "body_confirm" message sending before corpse confirmation message.
+
+## [v0.12.0b](https://github.com/TTT-2/TTT2/tree/v0.12.0b) (2023-12-11)
+
+### Added
+
+- Added the ability to edit slider numbers directly via an input field by clicking on the number (by @NickCloudAT)
+- Added a new way to alter player volume separately from the scoreboard (by @EntranceJew):
+  - `VOICE.(Get/Set)PreferredPlayerVoiceVolume` for setting the voice volume instead of `Player:SetVoiceVolumeScale`
+  - `VOICE.(Get/Set)PreferredPlayerVoiceMute` for setting the voice mute instead of `Player:SetMuted`
+  - `VOICE.UpdatePlayerVoiceVolume` commits / updates the voice setting according to player preferences
+- Added client submenu options for clients to change audio settings under `F1 > Gameplay > General` (by @EntranceJew):
+  - Added a convar `ttt2_voice_scaling` to control voice volume scaling, options like "power4" or "log" cause the volume scaling to have a greater perceptual impact between discrete volume settings.
+  - Added convars `ttt2_voice_duck_spectator` and `ttt2_voice_duck_spectator_amount` to lower spectator voice volume automatically.
+    - A value of `0.13` ducks someone's volume at 90% down to effectively 78%, according to the client's scaling mode.
+- Added the option for `DButtonTTT2` to have an icon next to the title (by @TimGoll)
+- Added a cached equipment item icon to its table as `.iconMaterial` (by @TimGoll)
+- Added a new `bodysearch` library that handles the search (by @TimGoll)
+- Completely reworked the body search UI (by @TimGoll)
+  - new UI that fits the UI rework
+  - added player model to UI
+  - highlighted player role and team in the UI
+  - redesigned data list so that everything can be seen without clicking through a list
+  - added more details to list like: water level, ground type, kill distance, kill direction, hit group, last damage amount
+  - The UI is now more responsive, it is updated when the server changes states on the body and timers are updated live in the UI
+- Added that the healthbar will pulsate when below 25% health. Toggleable in F1 Menu (by @NickCloudAT)
+- Added new menu section in F1 menu under `Appearance > Hud Switcher` for HudElement based features (by @NickCloudAT)
+- Brought in code files for `ttt_hat_deerstalker`, `weapon_ttt_phammer`, `ttt_flame`, and `weapon_ttt_push`.
+- Translated all strings still needed to german (by @NickCloudAT)
+- Added new sidebar information, when the scoreboard is open (by @TimGoll)
+- Added keybinding information to the bottom of the screen (by @TimGoll)
+  - Can be disabled in Appearance->Interface
+  - Shows binding name when scoreboard is opened
+- Added option to render rotated text on screen (by @TimGoll)
+- Added `TTT2GiveFoundCredits` hook for preventing / overriding the transfer of credits from a body to a player (by @Spanospy)
+- Added Ukrainian translation from base TTT (by @ErickMaksimets)
+- Added Swedish translation from base TTT (by @Kefta)
+- Added Turkish translation (by @NovaDiablox)
+- Added `ttt_dropclip` to drop loaded ammo from your active weapon. (by @wgetJane, implemented by @EntranceJew)
+- Added window flash and noise to alert players they're being revived (by @EntranceJew)
+- Added sql database access to panel elements
+  - `DNumSliderTTT2`, `DCheckBoxLabelTTT2`, `DComboBoxTTT2`
+- Added dashing to propspec (by @TimGoll)
+- Added new functions to database module
+  - `database.SetDefaultValuesFromItem(accessName, itemName, item)`
+
+### Changed
+
+- Changed sprint stamina to also consume while in air
+- Updated Simplified Chinese and Traditional Chinese localization files (by @sbzlzh):
+  - Add the missing `L.c4_disarm_t` translation in C4
+  - Remove redundant string translations and spaces
+  - Added all new translation strings
+- Updated file code to read from `data_static` as fallback in new location allowed in .gma (by @EntranceJew)
+- Scoreboard now sets preferred player volume and mute state in client's new `ttt2_voice` table (by @EntranceJew)
+  - Keyed by steamid64, making it more reliable than UniqueID or the per-session mute and volume levels.
+- Changed the body search convars and reworked the UI accordingly (by @TimGoll)
+  - Moved `ttt2_confirm_detective_only` and `ttt2_inspect_detective_only` to a new covar: `ttt2_inspect_confirm_mode`
+    - mode 0: default mode, normal TTT. Everyone can search and identify corpses. However now a player has to be confirmed first to take credits
+    - mode 1: everyone can see information, but only public policing roles can actually confirm bodies
+    - mode 2: only public policing roles can see informatiom. They have to confirm bodies so that other people are able to see this information as well
+  - to comply with mode 1 and 2 now everyone is able to see in the targetID if a player was searched by a public policing role
+- renamed `search_result` to `bodySearchResult` which contains the search result data
+- changed the credit text color from yellow to gold (by @TimGoll)
+- Updated the disguiser to make it more clear in the HUD if it is enabled or not
+- Updated the equipment HUD help boxes in a new style and added missing help boxes (by @TimGoll)
+- Changed LMB press behavior in observer mode to iterate backwards through player list instead of slecting a random player (by @TimGoll)
+- Improved translation of some Simplified Chinese strings (by @TheOnly8Z)
+- Dropping ammo with `ttt_dropammo` drops from reserve ammo instead of your active weapon's clip (by @wgetJane, implemented by @EntranceJew)
+- Added item name for `ttt_hat_deerstalker` (by @EntranceJew)
+- Changed syncing of database module to use whole tables instead of custom method
+- Replaced equipmenteditor syncing with database module
+- Replaced internal equipment syncing with database module
+- Moved reset buttons onto the left (by @a7f3)
+- Added ammo icons to the weapon switch HUD and player status HUD elements (by @EntranceJew)
+- Changed the disguiser icon to be more fitting (by @TimGoll)
+
+### Fixed
+
+- Fixed prediction of the sprinting system, for high ping situations (by @saibotk, thanks to @wgetJane)
+- Fixed removing the convar change callback in `DComboboxTTT2`, `DCheckBoxLabelTTT2`, `DNumSliderTTT2` (by @saibotk)
+- Multiple internal fixes
+  - biggest teamkiller award should now work
+  - item model caching should now work properly
+  - role info popup for traitors should now show teammembers again if the traitor shop is disabled
+  - `pon` and `table` libraries got a small fix respectively
+  - the shop and roleselection now reference `roles.INNOCENT` instead of the removed `INNOCENT` global, same for `TRAITOR` and `DETECTIVE`
+  - Fixed wrong translation % in F1-Menu when changing language (by @NickCloudAT)
+- Fixed disguiser breaking UI on hot reload (by @TimGoll)
+- Fixed blurred box rendering for boxes not starting at `0,0` (by @TimGoll)
+- Fixed spectated entity not being reset properly which can cause issues (by @TimGoll)
+- Optimized allocations by using global Vector / Angle when possible.
+- Fixed the dynamic armor damage calculation being wrong when damage can only get partially reduced
+- Fixed propspec inputs behaving sometimes unexpectedly (by @TimGoll)
+- Fixed ComboBoxes not working with integer values (by @NickCloudAT)
+- net.SendStream() can now also handle tables larger than 256kB, which exceeded the maximum net receive buffer
+- Fixed nil value of SetValue in `DNumSliderTTT2` , `DCheckBoxLabelTTT2`. And fix nil value for boxCache[name] in `PlayerModels` (by @sbzlzh)
+- Prevent weapon_tttbase Lua errors with NPCs (by @BuzzHaddaBig in base TTT)
+- Fix miniscoreboard HUD from showing confirmed players that switched to spectator as having been revived (by @EntranceJew)
+
+### Deprecated
+
+- Deprecated `AccessorFuncDT()`, Addons should remove the function call and replace `DTVar()` calls with `NetworkVar()`
+
+### Removed
+
+- Removed `ttt_confirm_death` and `ttt_call_detective` as they are now handled via proper net messages
+- Removed spectator texts from the UI in favor of the new key binding information (by @TimGoll)
+- Removed double tap sprinting, for easier prediction handling (by @saibotk)
+- Removed explicit "Sprint" key bind, please use the GMod native sprint key binding (by @saibotk)
+- Removed unused clientside `Player.preventSprint` flag (by @saibotk)
+
+## [v0.11.7b](https://github.com/TTT-2/TTT2/tree/v0.11.7b) (2023-08-27)
+
+### Added
+
+- Added a new font in default_skin.lua to fit the localization (by @Satton2)
+- Fixed knife death effect being permanently applied on every following death
+- Added `PANEL:MakeTextEntry(data)` to `DFormTTT2` for strings or string-backed cvars (by @EntranceJew)
+- Allow admin spectators to enter "Spawn Edit" mode. (by @EntranceJew)
+- Added cvar `ttt2_bots_lock_on_death` (default: 0) to prevent bots from causing log-spam while wandering as spectators. (by @EntranceJew)
+- Added `TTT2ModifyFinalRoles` hook for last minute opportunity to override role distribution prior to them being announced for the first time (by @EntranceJew)
+- `weapon_tttbase`:
+  - Added `SWEP:ShouldRemove` to facilitate intercepting `SWEP:Remove` (by @EntranceJew)
+  - Added `SWEP.damageScaling` for weapons that utilize `ShootBullet` (by @EntranceJew)
+- Edit Equipment Menu
+  - `AllowDrop` can now be overridden per-weapon (by @EntranceJew)
+  - `Kind` can now be overridden per-weapon (by @EntranceJew)
+  - `overrideDropOnDeath` now permits forcing weapons to be dropped instead of removed on death (by @EntranceJew)
+  - "Damage Scaling" editable under "Balance Settings" (by @EntranceJew)
+- `vgui.CreateTTT2Form` passes the name on so that it can be accessed via `Panel:GetName()` (by @EntranceJew)
+- Added two GAMEMODE hooks to provide the ability for additional addons to extend role/equipment menus.
+  - `GM:TTT2OnEquipmentAddToSettingsMenu(equipment, parent)`
+    - Called after `ITEM:AddToSettingsMenu(parent)`.
+  - `GM:TTT2OnRoleAddToSettingsMenu(role, parent)`
+    - Called after `ROLE:AddToSettingsMenu(parent)`
+
+### Changed
+
+- `weapon_tttbase`:
+  - Removal of `SWEP.IronSightsTime` as it was completely unused and conflicts with a networked value intended for the same purpose
+  - Commented-out default values for `SWEP.IronSightsPos` and `SWEP.IronSightsAng` to match vanilla TTT behaviour
+    - SWEPs can still use these names as normal, they just don't have a base value to inherit anymore
+- Updated Russian and English localization files (by @Satton2):
+  - Updated strings in English localization file
+  - Localized outdated and new strings into Russian
+- Updated all localization files (by @Satton2):
+  - Added missing and new strings
+  - Marked (out-) updated strings
+  - Removed some duplicated strings
+  - Removed some old unused strings
+  - Fixed some broken source strings (line names)
+- Simplified Chinese and Traditional Chinese localization updates (by @sbzlzh):
+  - Update Simplified Chinese Translation
+  - Improve translation (by @TheOnly8Z)
+- Localization parameters for `{walkkey} + {usekey}` prompts made into the predominant style.
+
+### Fixed
+
+- Fixed hotreload of TTT2 roles library by a fresh reinitialization
+- Fixed a wrong localization line call in roles.lua (by @Satton2)
+- Fixed +zoom bind
+- Fixed ttt_quickslot command
+- Fixed an issue in `table.GetEqualEntryKeys` when nil is provided instead of a table. (by @sbzlzh):
+  - This fixes spawn problems on maps with invalid spawn points
+  - This fixes errors in the F1 Menu language selection
+- Fixed the check for dynamic armor being inverted (`1` disabled it, `0` enabled it)
+- Fixed two unmatched ConVars in performance menu (by @NickCloudAT)
+- Fixed Round End Scoreboard (Round Begin) error if a player disconnected while round with no score events (by @NickCloudAT)
+- Fixed behavior of `entspawn.SpawnRandomAmmo` to produce non-deagle ammo. (by @NickCloudAT, mostly)
+
+## [v0.11.6b](https://github.com/TTT-2/TTT2/tree/v0.11.6b) (2022-09-25)
+
+### Changed
+
+- Fixed and updated the Chinese translation file (by @sbzlzh)
+- Updated Japanese translation (by @westooooo)
+- Updated Simplified and Traditional Chinese (by @TEGTianFan)
+- Add placeholder message to the ingame ttt2 guide (F1 Menu)
+
+### Fixed
+
+- Fixed the spawn editor tool not having a TargetID in some scenarios by always rendering the 'ttt_spawninfo_ent' (by @NickCloudAT)
+- Roleselection for a lot of roles now considers all possible subroles one after another
+- Fixed portuguese translation of the equipment editor not working
+
+## [v0.11.5b](https://github.com/TTT-2/TTT2/tree/v0.11.5b) (2022-08-21)
+
+### Added
+
+- Reworked our simplified Dropdowns MakePanel `PANEL:MakeComboBox(data)` version
+  - Added possibility to manipulate serverside ConVars with Dropdowns. Just add .serverConvar with the conVarName to the given data similar to .convar
+  - .serverConVar and .conVar are also supported
+  - data.choices can now be a table containing `{title, value, select, icon, additionalData}`
+  - data.selectValue is added, use it instead of data.selectName to choose the value you set
+  - data.selectTitle is added and shall replace data.selectName
+- New setting to disable session limits entirely. (by @Reispfannenfresser)
+- Added `GM:TTT2AdminCheck` hook
+  - Replaced all `IsSuperAdmin()` checks with this hook
+  - This hook can be used to allow custom usergroups through these checks
+- Added convars to modify how fall damage is applied:
+  - `ttt2_falldmg_enable (default: 1)` toggles whether or not to apply fall damage at all
+  - `ttt2_falldmg_min_velocity (default: 450)` sets the minimum velocity threshold for fall damage to occur
+  - `ttt2_falldmg_exponent (default: 1.75)` sets the exponent to increase fall damage in relation to velocity
+  - All these convars can also be adjusted in the F1->Administration->Player Settings menu
+- Added portuguese translation
+- Added a `database` library, that handles shared Interaction with the sql database
+
+### Breaking Changes
+
+- Reworked Dropdowns Panel `DComboBoxTTT2` itself
+  - `PANEL:AddChoice(title, value, select, icon, data)` now uses the second argument as value string for setting convars, use the fifth argument for special data instead
+  - `PANEL:ChooseOption(title, index, ignoreConVar)` is deprecated and no longer chooses the displayed text, only per index
+- Reworked our simplified Dropdowns MakePanel `PANEL:MakeComboBox(data)` version
+  - `data.OnChange(value, additionalData, comboBoxPanel)` is now called with the two important arguments at first. They are the value that e.g. convars are set, the additionalData and the Panel
+
+### Changed
+
+- Corrected incorrect translation (by @sbzlzh)
+- Optimized damage indicator vgui images to be smaller
+- Improved hotreload of TTT2 roles library with RoleList not being global
+
+### Fixed
+
+- Fixed addon compatibility checker fussing over disabled addons
+- Fixed ammo entities blocking +use traces
+- Fixed double call of `GM:TTT2UpdateTeam`, when a role change leads to a team change
+
+## [v0.11.4b](https://github.com/TTT-2/TTT2/tree/v0.11.4b) (2021-12-17)
+
+### Changed
+
+- Updated Japanese translation (by @westooooo)
+- Switched from the voicerecord commands to the GMod permission system due to a recent GMod update breaking the old voice chat
+
+## [v0.11.3b](https://github.com/TTT-2/TTT2/tree/v0.11.3b) (2021-11-18)
+
+### Fixed
+
+- Fixed Equipment-Editor not showing the current synced values, but the cached ones
+
+### Changed
+
+- Changed serverConVars not indexing with 0 in tables (could cause issues when iterating)
+
+## [v0.11.2b](https://github.com/TTT-2/TTT2/tree/v0.11.2b) (2021-11-17)
+
+### Fixed
+
+- Fixed correct role Karma multipliers used in Karma-module
+
+## [v0.11.1b](https://github.com/TTT-2/TTT2/tree/v0.11.1b) (2021-11-16)
+
+### Added
+
+- Added four new Karma multipliers as role variables. They are applied **after** all other Karma calculations are done
+  - `ROLE.karma.teamKillPenaltyMultiplier`: The multiplier that is used to calculate the Karma penalty for a team kill
+  - `ROLE.karma.teamHurtPenaltyMultiplier`: The multiplier that is used to calculate the Karma penalty for team damage
+  - `ROLE.karma.enemyKillBonusMultiplier`: The multiplier that is used to calculate the Karma given to the killer if a player from an enemy team is killed
+  - `ROLE.karma.enemyHurtBonusMultiplier`: The multiplier that is used to calculate the Karma given to the attacker if a player from an enemy team is damaged
+
+### Fixed
+
+- Fixed `ply:Give(weapon)` to work again, when weapons are cached, fixing the spawneditor to work again
+- Fixed spawneditor not causing errors, when going through walls due to many steps
+- Set default traitor button variable back to 0
+- Fixed unchanged or unscaled damage being sent to the client, leading to a wrongly working damage-overlay
+
+## [v0.11.0b](https://github.com/TTT-2/TTT2/tree/v0.11.0b) (2021-11-15)
+
+### Added
+
+- Added the hook `GM:TTT2CalledPolicingRole` that is called after all policing role players were called to a corpse
+- Added all TTT2 convars into the F1 menu
+  - most convars are located in the 'administration' menu
+  - equipment specific settings can be found in the 'edit equipment' menu
+- Added icon to the magneto stick
+- Added the function `AddToSettingsMenu` to both `SWEP` and `ITEM` to add settings to the equipment menu
+- Added the role flag `.isOmniscientRole`; if set to true the role is able to see missing in action players and the haste mode time
+- Added `GM:TTT2ModifyOverheadIcon` to add, remove or modify the overhead icons of players
+
+### Fixed
+
+- Fixed that every policing player could be called to a corpse, this is now again restricted to alive only players
+- Fixed inconsistency between `.disabledTeamChatRecv` and `.disabledTeamChatRec`
+- Fixed non-public policing roles having hats and therefore confirming them
+- Fixed triggered spawns on maps like 'ttt_lttp_kakariko_a5' with the vases and 'ttt_mc_jondome' with the chests
+- Fixed roleselection layering with base roles to ensure layer order is considered correctly when selecting roles
+- Fixed hotreloading items
+- Fixed random playermodel selection on map change not working
+- Fixed `ply:Give` sometimes picking up all surrounding weapon entities, if auto pickup is enabled
+- Fixes weapon pickup sometimes causing floating weapons
+- Fixes weapon pickup sometimes failing if a weapon with the same class as a weapon in the inventory should be picked up
+
+### Changed
+
+- All public policing roles now appear as detectives in the chat
+- Change blocking revival mode from `true`/`false` to
+  - `REVIVAL_BLOCK_NONE`: don't block the winning condition during the revival process [default, previously `nil`/`false`]
+  - `REVIVAL_BLOCK_AS_ALIVE`: only block the winning condition, if the player being alive would change the outcome [previously `true`]
+  - `REVIVAL_BLOCK_ALL`: block the winning condition until the revival process is ended
+  - the old arguments still work, they are automatically converted
+- Changed logs folder to `terrortown/logs/` to be inline with everything else
+- Added more role agnostics
+  - voice drain rate is now no longer bound to Detectives but to all public policing roles
+  - Karma multiplier is now no longer bound to Detectives but to all public policing roles
+  - all non-innocent roles are now able to pin ragdolls if enabled (previous only Traitors could do this)
+- Overhead icons are now also either colored black or white depending on the role's color
+
+### Breaking Changes
+
+- Renamed some convars to be inline with our 'opt-in style', all values were changed so that the default value is kept
+  - `ttt_no_prop_throwing` is now `ttt_prop_throwing`
+  - `ttt_limit_spectator_chat` is now `ttt_spectators_chat_globally`
+  - `ttt_no_nade_throw_during_prep` is now `ttt_nade_throw_during_prep`
+  - `ttt_armor_classic` is now `ttt_armor_dynamic`
+
+## [v0.10.3b](https://github.com/TTT-2/TTT2/tree/v0.10.3b) (2021-10-29)
+
+### Fixed
+
+- Fixed the hook scope in the disguiser causing an error
+- Fixed the classic entity spawn mode breaking on maps without all three spawn types
+- Fixed weapons not using their average firerate with a tickrate dependent fix. Function `SWEP:SetNextPrimaryFire(nextTime)` was overwritten with our fix `SWEP:SetNextPrimaryFire(nextTime, skipTickrateFix)`
+
+### Changed
+
+- Added new param `skipTickrateFix` to `SWEP:SetNextPrimaryFire(nextTime, skipTickrateFix)` to skip our inbuilt tickrate fix
+
+## [v0.10.2b](https://github.com/TTT-2/TTT2/tree/v0.10.2b) (2021-10-21)
+
+### Added
+
+- Added a new hook `GM:TTT2ModifyRadioTarget` to modify the current radio target
+- Added documentation to all hooks
+
+### Fixed
+
+- Fixed the reset button not working for Sliders in the F1 Menu
+- Fixed defuser only working for detectives
+- Fixed some weapon packs like ArcCW to be working again, weapons are now initialized with ttt2 variables after the `InitPostEntity` hook
+
+### Changed
+
+- Changed the Sliders to only update after dragging ends, no matter where you clicked on the slider before dragging
+- Changed `TTTPlayerUsedHealthStation` hook, return `false` to cancel health regeneration tick
+- Changed all C4 hooks to be cancelable
+
+### Removed
+
+- Removed old concommand `shopeditor` and the old shopeditor
+
+### Breaking Changes
+
+- Renamed hook `GM:TTT2CheckWeaponForID` to `GM:TTT2RegisterWeaponID` better fitting its purpose as its probably nowhere used yet anyway
+
+## [v0.10.1b](https://github.com/TTT-2/TTT2/tree/v0.10.1b) (2021-10-15)
+
+### Fixed
+
+- Fixed Playermodels not correctly loading changes on game start
+- Fixed setting defaults before assigning a resetButton not throwing an error anymore
+- Fixed invisible preview for entity spawn placements
+
+## [v0.10.0b](https://github.com/TTT-2/TTT2/tree/v0.10.0b) (2021-10-14)
+
+### Added
+
+- Added a new scoring variable named `score.survivePenaltyMultiplier` to punish surviving players of a losing team
+- Added in game spawn editor system that can be found in F1->Administration
+- Moved all TTT weapons to this repository (with cleaned up code)
+- Added in four new libraries
+  - map: A library which handles map specific data
+  - entspawn: A library that handles the spawning and spawns of all entity types
+  - entspawnscript: A library that handles the new TTT2 entity spawn script to customize spawns
+  - plyspawn: A library that builds on top of entspawn to handle the more complex player spawn (originally named spawn, see `Breaking changes`)
+- Added a new submenu to the administration settings regarding basic role setup
+- Added a new menu to the F1 menu to set up and configure all installed menus
+- Added two new hooks to modify the contents of the newly added menu
+  - `ROLE:AddToSettingsMenu(parent)`
+  - `ROLE:AddToSettingsMenuCreditsForm(parent)`
+- Added a new in-game player model selector
+  - Added new convars that can change the way playermodels are selected (these can be found in the gamemode menu)
+  - Added a new ConVar `ttt2_use_custom_models` (def: 0) to enable the custom player model selector
+  - Added indicator that shows if a model has a headshot hitbox
+  - Added possibility to enable/disable detective hats for individual player models
+- Added a new admin only menu for server addon settings
+- Added automatic default values for serverConVars
+- Added two new role variables:
+  - `isPublicRole`: This makes the role behave like a detective in such a way, that the role is public known and shown in the scoreboard. This means other roles can use this without special role syncing; additionally roles with that flag will be handled like a detective if killed by an 'evil' role, meaning that they will receive a credit bonus
+  - `isPolicingRole`: This rolevar adds all "detective-like" features to the detective, for example the ability to be called to a corpse etc.
+- Added two new role conVar variables:
+  - `creditsAwardDeadEnable`: To award this role if a certain percentage of players from the enemy teams died
+  - `creditsAwardKillEnable`: To award this role if they killed a high value public role
+
+### Changed
+
+- Split up kill, suicide and teamkill in the round end screen to make it more clear
+- Decreased the minimum cost of equipment in the equipment editor to 0
+- Changed disguise such that every role can now use the function
+- Completely reworked how weapons, ammo and players spawn in the world
+- Sliders only update ConVars on mouseRelease now
+- Changed the way credits on kills are distributed in a way that non-default roles can easily use this as well
+
+### Breaking Changes
+
+- Removed the (unused?) ConVar `ttt2_custom_models`
+- Removed the function `GetRandomPlayerModel()`, use `playermodels.GetRandomPlayerModel()` instead
+- Renamed the `spawn` module to `plyspawn`
+- Hook `PlayerSelectSpawn` doesnt return a spawnEntity anymore
+- SpawnWillingPlayers is deleted and not available anymore
+- renamed the `ttt_credits_starting` to `ttt_traitor_credits_starting` to be more in-line with all other roles
+  **WARNING:** This means that every traitor now starts with 0 credits until the convar reset button is pressed (on existing servers)
+- removed the `alone_bonus` convar because it only complicated the credits system further without adding much benefit
+
+## [v0.9.3b](https://github.com/TTT-2/TTT2/tree/v0.9.3b) (2021-09-25)
+
+### Added
+
+- Add Traditional Chinese Translation (by @TEGTianFan)
+- Added a searchbar to submenus
+- Added full-sized icons to the equipment-editor
+- Hotreload functionality for weapons, they are now fully compatible to TTT2 after hotreload
+- Added experimental `SWEP.HotReloadableKeys` a list of strings to weapons, that makes data saved with `weapons.GetStored()` persistent across hotreloads
+- Extended cvars library to support manipulation of serverside ConVars
+- Added possibility to manipulate serverside ConVars with Checkboxes and Sliders
+  - Just add .serverConvar with the conVarName to the given data similar to .convar
+
+### Fixed
+
+- Updated Japanese translation (by @westooooo)
+- Fixed text positioning in pure_skin bar (by @LukasMandok)
+- Fixed data being not persistent after hot reloading
+  - HUDs are now still available
+  - ttt2net keeps its data
+  - bindings are not lost on reload
+- Fixed id-errors of weapons registered before TTT2 was loaded
+
+### Changed
+
+- Revise and additions simplified Chinese (by @TEGTianFan)
+- Prevent spectators from gathering info on players if they're about to revive (by @AaronMcKenney)
+- ROLE_NONE does not count as a special role anymore (by @TheNickSkater)
+
+### Internal Breaking Changes
+
+- Removed first argument of `GetEquipmentBase(data, equipment)`, it only takes the equipment as argument now `GetEquipmentBase(equipment)` and generally merges it with `EquipMenuData`
+- Added equipment as argument to `InitDefaultEquipmentForRole(roleData)`, it now only initializes the given equipment not all `InitDefaultEquipmentForRole(roleData, equipment)`
+- Added equipment as argument to `CleanUpDefaultCanBuyIndices()`, it now only initializes the given equipment not all `CleanUpDefaultCanBuyIndices(equipment)`
+
+## [v0.9.2b](https://github.com/TTT-2/TTT2/tree/v0.9.2b) (2021-06-20)
+
+### Fixed
+
+- Fixed low karma autokick convar
+- Fixed multi-layer inheritance by introducing a recursion based approach
+
+## [v0.9.1b](https://github.com/TTT-2/TTT2/tree/v0.9.1b) (2021-06-19)
+
+### Fixed
+
+- Fixed shop convars not being shared / breaking the shop
+
+## [v0.9.0b](https://github.com/TTT-2/TTT2/tree/v0.9.0b) (2021-06-19)
+
 ### Added
 
 - All new roundend menu
@@ -16,7 +537,9 @@ All notable changes to TTT2 will be documented here. Inspired by [keep a changel
   - Enables the possibility to give Innocents access to a custom shop (`shopeditor`)
 - Karma now stores changes
   - Is shown in roundend menu
+- Added a new hook `TTT2ModifyLogicCheckRole` that can be used to modify the tested role for map related role checks
 - Added the ConVar `ttt2_random_shop_items` for the number of items in the randomshop
+- Added per-player voice control by hovering over the mute icon and scrolling
 
 ### Fixed
 
@@ -28,22 +551,47 @@ All notable changes to TTT2 will be documented here. Inspired by [keep a changel
 - Fixed silent Footsteps, while crouched bhopping
 - Fixed issue where base innocents could bypass the TTT2AvoidGeneralChat and TTT2AvoidTeamChat hooks with the team chat key
 - Fixed issue where roles with unknownTeam could see messages sent with the team chat key
+- Fixed the admin section label not being visible in the main menu
+- Fixed the auto resizing of the buttons based on the availability of a scrollbar not working
+- Fixed reopening submenus of the legacy addons in F1 menu not working
+- TTT: Fixed karma autokick evasion
+- TTT: Fixed karma being applied to weapon damage even though karma is disabled
 
 ### Changed
 
 - Microoptimization to improve code performance
-- Converted `roles` module into a library
+- Converted `roles`, `huds`, `hudelements`, `items` and `pon` modules into libraries
+- Moved `bind` library to the libraries folder
+- Moved favorites functions for equipment to the equipment shop and made them local functions
 - Code cleanup and removed silly negations
 - Extended some ttt2net functions
 - Changed `bees` win to `nones` win
+- By default all evil roles are now counted as traitor roles for map related checks
 - Changed the ConVar `ttt2_random_shops` to only disable the random shop (if set to `0`)
 - Shopeditor settings are now available in the F1 Menu
+- Moved the F1 menu generating system from a hook based system to a file based system
+  - removed the hooks `TTT2ModifyHelpMainMenu` and `TTT2ModifyHelpSubMenu`
+  - menus are now generated based on files located in `lua/terrortown/menus/gamemode/`
+  - submenus are generated from files located in folders with the menu name
+- Menus without content are now always hidden in the main menu
+- Moved Custom Shopeditor and linking shop to roles to the F1 menu
+- Moved inclusion of cl_help to the bottom as nothing depends on it, but menus created by it could depend on other client files
+- Shopeditor equipment is now available in F1 menu
+- Moved the role layering menu to the F1 menu (administration submenu)
+  - removed the command `ttt2_edit_rolelayering`
+- moved the internal path of `lang/`, `vskin/` and `events/` (this doesn't change anything for addons)
+- Sort teammates first in credit transfer selection and add an indicator to them
+
+### Removed
+
+- Removed the custom loading screen (GMOD now only accepts http(s) URLs for sv_loadingurl)
 
 ### Breaking Changes
 
 - Adjusted `Player:HasRole()` and `Player:HasTeam()` to support simplified role and team checks (no parameter are supported anymore, use `Player:GetRole()` or `Player:GetTeam()` instead)
 - Moved global roleData to the `roles` library (e.g. `INNOCENT` to `roles.INNOCENT`). `INNOCENT`, `TRAITOR` etc. is not supported anymore. `ROLE_<ROLENAME>` is still supported and won't be changed.
-
+- Shopeditor function `ShopEditor.ReadItemData()` now only updates a number of key-parameters, must be given as UInt. Messages were changed accordingly (`TTT2SESaveItem`,`TTT2SyncDBItems`)
+- Equipment shop favorite functions are now local and not global anymore (`CreateFavTable`, `AddFavorite`, `RemoveFavorite`, `GetFavorites` & `IsFavorite`)
 
 ## [v0.8.2b](https://github.com/TTT-2/TTT2/tree/v0.8.2b) (2021-03-25)
 
@@ -226,6 +774,7 @@ All notable changes to TTT2 will be documented here. Inspired by [keep a changel
 ## [v0.7.1b](https://github.com/TTT-2/TTT2/tree/v0.7.1b) (2020-06-02)
 
 ### Fixed
+
 - Fixed max roles / max base roles interaction with the roleselection. Also does not crash with values != 0 anymore.
 
 ## [v0.7.0b](https://github.com/TTT-2/TTT2/tree/v0.7.0b) (2020-06-01)
@@ -233,8 +782,8 @@ All notable changes to TTT2 will be documented here. Inspired by [keep a changel
 ### Added
 
 - Added new convars to change the behavior of the armor
-	- `ttt_item_armor_block_headshots (default: 0)` - Block headshots. Thanks @TheNickSkater
-	- `ttt_item_armor_block_blastdmg (default: 0)` - Block blast damage. Thanks @Pustekuchen98
+  - `ttt_item_armor_block_headshots (default: 0)` - Block headshots. Thanks @TheNickSkater
+  - `ttt_item_armor_block_blastdmg (default: 0)` - Block blast damage. Thanks @Pustekuchen98
 - Added essential items: 8 different types of items that are often used in other addons. You can remove them from the shop if you don't like them.
 - Added server proxy for `EPOP:AddMessage()`
 - Added `PrintMessage` overwrites so this function now uses TTT2 systems

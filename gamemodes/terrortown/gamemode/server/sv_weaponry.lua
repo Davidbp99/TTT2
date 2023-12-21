@@ -24,15 +24,12 @@ local cv_auto_pickup = CreateConVar("ttt_weapon_autopickup", "1", {FCVAR_ARCHIVE
 local cv_ttt_detective_hats = CreateConVar("ttt_detective_hats", "0", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
 
 ---
--- @realm server
-local crowbar_delay = CreateConVar("ttt2_crowbar_shove_delay", "1.0", {FCVAR_NOTIFY, FCVAR_ARCHIVE})
-
----
 -- Returns whether or not a @{Player} is allowed to pick up a @{Weapon}
 -- @note Prevent @{Player}s from picking up multiple @{Weapon}s of the same type etc
 -- @param Player ply The @{Player} attempting to pick up the @{Weapon}
 -- @param Weapon wep The @{Weapon} entity in question
--- @param nil|number dropBlockingWeapon should the weapon stored in the same slot be dropped
+-- @param[opt] number dropBlockingWeapon should the weapon stored in the same slot be dropped
+-- @param[opt] boolean isPickupProbe Set this to true to mark this hook run as probe
 -- @return boolean Allowed pick up or not
 -- @return number errorCode
 -- 1 - Player is spectator
@@ -44,11 +41,11 @@ local crowbar_delay = CreateConVar("ttt2_crowbar_shove_delay", "1.0", {FCVAR_NOT
 -- @realm server
 -- @ref https://wiki.facepunch.com/gmod/GM:PlayerCanPickupWeapon
 -- @local
-function GM:PlayerCanPickupWeapon(ply, wep, dropBlockingWeapon)
+function GM:PlayerCanPickupWeapon(ply, wep, dropBlockingWeapon, isPickupProbe)
 	if not IsValid(wep) or not IsValid(ply) then return end
 
 	-- spectators are not allowed to pickup weapons
-	if ply:IsSpec() then
+	if ply:IsSpec() and WEPS.GetClass(wep) ~= "weapon_ttt_spawneditor" then
 		return false, 1
 	end
 
@@ -62,7 +59,7 @@ function GM:PlayerCanPickupWeapon(ply, wep, dropBlockingWeapon)
 	-- block pickup when there is no slot free
 	-- exception: this hook is called to check if a player can pick up weapon while dropping
 	-- the current weapon
-	if not dropBlockingWeapon and not InventorySlotFree(ply, wep.Kind) then
+	if not dropBlockingWeapon and not InventorySlotFree(ply, wep.Kind) and not ply.forcedPickup then
 		return false, 3
 	end
 
@@ -76,15 +73,24 @@ function GM:PlayerCanPickupWeapon(ply, wep, dropBlockingWeapon)
 		return false, 5
 	end
 
-	-- Who knows what happens here?!
-	local tr = util.TraceEntity({
-		start = wep:GetPos(),
-		endpos = ply:GetShootPos(),
-		mask = MASK_SOLID
-	}, wep)
+	-- if the player has cached their inventory, weapons should not be picked up with the
+	-- exception of weapons given by the ply:Give function
+	if ply:HasCachedWeapons() and not ply.forcedGive then
+		return false, 6
+	end
 
-	if tr.Fraction == 1.0 or tr.Entity == ply then
-		wep:SetPos(ply:GetShootPos())
+	-- make sure that the weapon is moved to the player if it should be automatically picked
+	-- up; this however should not happen for manual pickup and/or hook probing
+	if cv_auto_pickup:GetBool() and not ply.forcedPickup and not isPickupProbe then
+		local tr = util.TraceEntity({
+			start = wep:GetPos(),
+			endpos = ply:GetShootPos(),
+			mask = MASK_SOLID
+		}, wep)
+
+		if tr.Fraction == 1.0 or tr.Entity == ply then
+			wep:SetPos(ply:GetShootPos())
+		end
 	end
 
 	return true
@@ -107,7 +113,7 @@ local function GetLoadoutWeapons(subrole)
 	for i = 1, #weps do
 		local w = weps[i]
 
-		if not istable(w.InLoadoutFor) or w.Doublicated then continue end
+		if not istable(w.InLoadoutFor) or w.Duplicated then continue end
 
 		local cls = WEPS.GetClass(w)
 
@@ -245,7 +251,7 @@ local function GetLoadoutItems(subrole)
 	for i = 1, #itms do
 		local w = itms[i]
 
-		if not istable(w.InLoadoutFor) or w.Doublicated then continue end
+		if not istable(w.InLoadoutFor) or w.Duplicated then continue end
 
 		local cls = w.id
 
@@ -311,48 +317,6 @@ local function ResetLoadoutItems(ply)
 
 		ply:RemoveItem(itms[i].id)
 	end
-end
-
--- Quick hack to limit hats to models that fit them well
-local Hattables = {
-	"phoenix.mdl",
-	"arctic.mdl",
-	"Group01",
-	"monk.mdl"
-}
-
-local function CanWearHat(ply)
-	local path = string.Explode("/", ply:GetModel())
-
-	if #path == 1 then
-		path = string.Explode("\\", path)
-	end
-
-	return table.HasValue(Hattables, path[3])
-end
-
--- Just hats right now
-local function GiveLoadoutSpecial(ply)
-	if not ply:IsActive() or ply:GetBaseRole() ~= ROLE_DETECTIVE or not cv_ttt_detective_hats:GetBool() or not CanWearHat(ply) then
-		SafeRemoveEntity(ply.hat)
-
-		ply.hat = nil
-
-		return
-	end
-
-	if IsValid(ply.hat) then return end
-
-	local hat = ents.Create("ttt_hat_deerstalker")
-	if not IsValid(hat) then return end
-
-	hat:SetPos(ply:GetPos() + Vector(0, 0, 70))
-	hat:SetAngles(ply:GetAngles())
-	hat:SetParent(ply)
-
-	ply.hat = hat
-
-	hat:Spawn()
 end
 
 ---
@@ -447,7 +411,16 @@ function GM:PlayerLoadout(ply, isRespawn)
 		GiveLoadoutWeapon(ply, give[i])
 	end
 
-	GiveLoadoutSpecial(ply)
+	playermodels.RemovePlayerHat(ply)
+	playermodels.ApplyPlayerHat(ply, function(p)
+		local plyRoleData = ply:GetSubRoleData()
+
+		return ply:IsActive()
+			and plyRoleData.isPolicingRole
+			and plyRoleData.isPublicRole
+			and cv_ttt_detective_hats:GetBool()
+			and playermodels.PlayerCanHaveHat(ply)
+	end)
 
 	if not HasLoadoutWeapons(ply) then
 		MsgN("Could not spawn all loadout weapons for " .. ply:Nick() .. ", will retry.")
@@ -482,67 +455,16 @@ local function DropActiveWeapon(ply)
 	ply:SafeDropWeapon(ply:GetActiveWeapon(), false)
 end
 concommand.Add("ttt_dropweapon", DropActiveWeapon)
-
-local function DropActiveAmmo(ply)
+concommand.Add("ttt_dropammo", function(ply)
+	if not IsValid(ply) then return end
+	local wep = ply:GetActiveWeapon()
+	ply:SafeDropAmmo(wep, false)
+end)
+concommand.Add("ttt_dropclip", function(ply)
 	if not IsValid(ply) then return end
 
-	local wep = ply:GetActiveWeapon()
-
-	if not IsValid(wep) or not wep.AmmoEnt then return end
-
-	local hook_data = {wep:Clip1()}
-
-	---
-	-- @realm server
-	if hook.Run("TTT2DropAmmo", ply, hook_data) == false then
-		LANG.Msg(ply, "drop_ammo_prevented", nil, MSG_CHAT_WARN)
-
-		return
-	end
-
-	local amt = hook_data[1]
-
-	if amt < 1 or amt <= wep.Primary.ClipSize * 0.25 then
-		LANG.Msg(ply, "drop_no_ammo", nil, MSG_CHAT_WARN)
-
-		return
-	end
-
-	local pos, ang = ply:GetShootPos(), ply:EyeAngles()
-	local dir = ang:Forward() * 32 + ang:Right() * 6 + ang:Up() * -5
-	local tr = util.QuickTrace(pos, dir, ply)
-
-	if tr.HitWorld then return end
-
-	wep:SetClip1(0)
-
-	ply:AnimPerformGesture(ACT_GMOD_GESTURE_ITEM_GIVE)
-
-	local box = ents.Create(wep.AmmoEnt)
-
-	if not IsValid(box) then return end
-
-	box:SetPos(pos + dir)
-	box:SetOwner(ply)
-	box:Spawn()
-	box:PhysWake()
-
-	local phys = box:GetPhysicsObject()
-
-	if IsValid(phys) then
-		phys:ApplyForceCenter(ang:Forward() * 1000)
-		phys:ApplyForceOffset(VectorRand(), vector_origin)
-	end
-
-	box.AmmoAmount = amt
-
-	timer.Simple(2, function()
-		if not IsValid(box) then return end
-
-		box:SetOwner(nil)
-	end)
-end
-concommand.Add("ttt_dropammo", DropActiveAmmo)
+	ply:SafeDropAmmo(ply:GetActiveWeapon(), true)
+end)
 
 ---
 -- Called as a @{Weapon} entity is picked up by a @{Player}.<br />
@@ -648,6 +570,10 @@ end
 function WEPS.DropNotifiedWeapon(ply, wep, deathDrop, keepSelection)
 	if not IsValid(ply) or not IsValid(wep) then return end
 
+	-- Tag the weapon as having been dropped due to a player death so that
+	-- we can prevent it from dropping if we want.
+	wep.IsDroppedBecauseDeath = deathDrop
+
 	-- Hack to tell the weapon it's about to be dropped and should do what it
 	-- must right now
 	if wep.PreDrop then
@@ -676,9 +602,17 @@ function WEPS.DropNotifiedWeapon(ply, wep, deathDrop, keepSelection)
 		ply:SelectWeapon("weapon_ttt_unarmed")
 	end
 
+	if deathDrop and wep.overrideDropOnDeath == DROP_ON_DEATH_TYPE_DENY then
+		wep:Remove()
+		return
+	end
+
 	ply:DropWeapon(wep)
 
 	wep:PhysWake()
+
+	-- Unset this, because we can't use it after this point.
+	wep.IsDroppedBecauseDeath = nil
 end
 
 ---
@@ -718,20 +652,25 @@ function WEPS.IsInstalled(cls)
 	return false
 end
 
--- manipulate shove attack for all crowbar alikes
-local function ChangeShoveDelay()
-	local weps = weapons.GetList()
+---
+-- Use this hook to modify the default loadout of a role.
+-- @note It is recommended to use the function @{ROLE:GiveRoleLoadout} to give a role
+-- the loadout if you are the creator of the role yourself.
+-- @param table loadout A table with @{ITEM}s or @{WEAPON}s that can be modified
+-- @param number role The role indentifier
+-- @hook
+-- @realm server
+function GM:TTT2ModifyDefaultLoadout(loadout, role)
 
-	for i = 1, #weps do
-		local wep = weps[i]
-
-		--all weapons on the WEAPON_MELEE slot should be Crowbars or Crowbar alikes
-		if not wep.Kind or wep.Kind ~= WEAPON_MELEE then continue end
-
-		wep.Secondary.Delay = crowbar_delay:GetFloat()
-	end
 end
 
-cvars.AddChangeCallback(crowbar_delay:GetName(), ChangeShoveDelay, "TTT2CrowbarShoveDelay")
+---
+-- Used to modifiy or block the amount of ammo dropped.
+-- @param Player ply The player that tries to drop ammo
+-- @param table amountTbl The table where the amount is stored, it can be modified
+-- @return nil|boolean Return false to prevent the drop of the ammo
+-- @hook
+-- @realm server
+function GM:TTT2DropAmmo(ply, amountTbl)
 
-hook.Add("TTT2Initialize", "TTT2ChangeMeleesSecondaryDelay", ChangeShoveDelay)
+end

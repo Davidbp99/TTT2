@@ -45,6 +45,12 @@ function GM:HUDPaint()
 		HUDManager.DrawHUD()
 	end
 
+	---
+	-- @realm client
+	if hook.Run("HUDShouldDraw", "TTT2KeyHelp") then
+		keyhelp.Draw()
+	end
+
 	if not client:Alive() or client:Team() == TEAM_SPEC then return end
 
 	---
@@ -107,7 +113,7 @@ local gmodhud = {
 -- @note This hook is called HUNDREDS of times per second (more than 5 times per frame on average).
 -- You shouldn't be performing any computationally intensive operations.
 -- @param string name The name of the HUD element. You can find a full list of HUD elements for this hook
--- <a href="https://wiki.garrysmod.com/page/HUD_Element_List">here</a>.
+-- <a href="https://wiki.facepunch.com/gmod/HUD_Element_List">here</a>.
 -- @return boolean Return false to prevent the given element from being drawn on the client's screen.
 -- @hook
 -- @realm client
@@ -209,3 +215,13 @@ end
 net.Receive("TTT2ReceiveHUD", function()
 	UpdateHUD(net.ReadString())
 end)
+
+---
+-- This hook is called after the HUD was updated and the HUD change
+-- was confirmed by the server.
+-- @param string name The name of the new HUD
+-- @hook
+-- @realm client
+function GM:TTT2HUDUpdated(name)
+
+end

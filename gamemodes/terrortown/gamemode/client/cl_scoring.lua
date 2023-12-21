@@ -131,7 +131,7 @@ end
 function CLSCORE:CreatePanel()
 	self:CalculateSizes()
 
-	local frame = vguihandler.GenerateFrame(self.sizes.width, self.sizes.height, "report_title", true)
+	local frame = vguihandler.GenerateFrame(self.sizes.width, self.sizes.height, "report_title")
 
 	frame:SetPadding(0, 0, 0, 0)
 	frame:CloseButtonClickOverride(function()
@@ -178,7 +178,7 @@ function CLSCORE:CreatePanel()
 	local buttonClose = vgui.Create("DButtonTTT2", buttonArea)
 	buttonClose:SetText("close")
 	buttonClose:SetSize(self.sizes.widthButton, self.sizes.heightButton)
-	buttonClose:SetPos(self.sizes.widthMainArea - 175, self.sizes.padding + 1)
+	buttonClose:SetPos(self.sizes.widthMainArea - self.sizes.widthButton, self.sizes.padding + 1)
 	buttonClose.DoClick = function(btn)
 		self:HidePanel()
 	end
@@ -189,7 +189,7 @@ function CLSCORE:CreatePanel()
 	for i = 1, #subMenusIndexed do
 		local data = subMenusIndexed[i]
 
-		local menuButton = menuBoxGrid:Add("DSubMenuButtonTTT2")
+		local menuButton = menuBoxGrid:Add("DSubmenuButtonTTT2")
 		menuButton:SetSize(self.sizes.widthMenu - 1, self.sizes.heightMenuButton)
 		menuButton:SetIcon(data.icon)
 		menuButton:SetTooltip(data.title)
@@ -264,7 +264,7 @@ end
 
 ---
 -- Saves the current score @{Panel}'s data into a log file
--- @note The logfiles are stored in <code>ttt/logs</code>
+-- @note The logfiles are stored in <code>terrortown/logs</code>
 -- @realm client
 -- @internal
 function CLSCORE:SaveLog()
@@ -276,7 +276,7 @@ function CLSCORE:SaveLog()
 		return
 	end
 
-	local logdir = "ttt/logs"
+	local logdir = "terrortown/logs"
 
 	if not file.IsDir(logdir, "DATA") then
 		file.CreateDir(logdir)

@@ -45,10 +45,13 @@ ttt_include("vgui__cl_scrolllabel")
 ttt_include("cl_vskin__default_skin")
 ttt_include("cl_vskin__vgui__dpanel")
 ttt_include("cl_vskin__vgui__dframe")
+ttt_include("cl_vskin__vgui__dimagecheckbox")
+ttt_include("cl_vskin__vgui__droleimage")
 ttt_include("cl_vskin__vgui__dmenubutton")
 ttt_include("cl_vskin__vgui__dsubmenubutton")
 ttt_include("cl_vskin__vgui__dnavpanel")
 ttt_include("cl_vskin__vgui__dcontentpanel")
+ttt_include("cl_vskin__vgui__dcard")
 ttt_include("cl_vskin__vgui__dbuttonpanel")
 ttt_include("cl_vskin__vgui__dcategoryheader")
 ttt_include("cl_vskin__vgui__dcategorycollapse")
@@ -59,6 +62,7 @@ ttt_include("cl_vskin__vgui__dlabel")
 ttt_include("cl_vskin__vgui__dcombobox")
 ttt_include("cl_vskin__vgui__dcheckboxlabel")
 ttt_include("cl_vskin__vgui__dnumslider")
+ttt_include("cl_vskin__vgui__dtextentry")
 ttt_include("cl_vskin__vgui__dbinderpanel")
 ttt_include("cl_vskin__vgui__dscrollpanel")
 ttt_include("cl_vskin__vgui__dvscrollbar")
@@ -66,7 +70,15 @@ ttt_include("cl_vskin__vgui__dcoloredbox")
 ttt_include("cl_vskin__vgui__dcoloredtextbox")
 ttt_include("cl_vskin__vgui__dtooltip")
 ttt_include("cl_vskin__vgui__deventbox")
+ttt_include("cl_vskin__vgui__ddragbase")
+ttt_include("cl_vskin__vgui__drolelayeringreceiver")
+ttt_include("cl_vskin__vgui__drolelayeringsender")
+ttt_include("cl_vskin__vgui__dsearchbar")
+ttt_include("cl_vskin__vgui__dprofilepanel")
+ttt_include("cl_vskin__vgui__dinfoitem")
+ttt_include("cl_vskin__vgui__dsubmenulist")
 
+ttt_include("cl_changes")
 ttt_include("cl_network_sync")
 ttt_include("cl_hud_editor")
 ttt_include("cl_hud_manager")
@@ -80,8 +92,6 @@ ttt_include("cl_search")
 ttt_include("cl_tbuttons")
 ttt_include("cl_scoreboard")
 ttt_include("cl_tips")
-ttt_include("cl_help_data")
-ttt_include("cl_help")
 ttt_include("cl_msgstack")
 ttt_include("cl_eventpopup")
 ttt_include("cl_hudpickup")
@@ -94,7 +104,6 @@ ttt_include("cl_shopeditor")
 ttt_include("cl_chat")
 ttt_include("cl_radio")
 ttt_include("cl_voice")
-ttt_include("cl_changes")
 ttt_include("cl_inventory")
 ttt_include("cl_status")
 ttt_include("cl_player_ext")
@@ -103,6 +112,8 @@ ttt_include("cl_armor")
 ttt_include("cl_damage_indicator")
 ttt_include("sh_armor")
 ttt_include("cl_weapon_pickup")
+
+ttt_include("cl_help") -- Creates Menus which depend on other client files. Should be loaded as late as possible
 
 fileloader.LoadFolder("terrortown/autorun/client/", false, CLIENT_FILE, function(path)
 	MsgN("Added TTT2 client autorun file: ", path)
@@ -146,21 +157,18 @@ function GM:Initialize()
 	self.round_state = ROUND_WAIT
 	self.roundCount = 0
 
-	-- load addon language files
+	-- load default TTT2 language files or mark them as downloadable on the server
+	-- load addon language files in a second pass, the core language files are loaded earlier
+	fileloader.LoadFolder("terrortown/lang/", true, CLIENT_FILE, function(path)
+		MsgN("Added TTT2 language file: ", path)
+	end)
+
 	fileloader.LoadFolder("lang/", true, CLIENT_FILE, function(path)
 		MsgN("[DEPRECATION WARNING]: Loaded language file from 'lang/', this folder is deprecated. Please switch to 'terrortown/lang/'")
 		MsgN("Added TTT2 language file: ", path)
 	end)
 
-	fileloader.LoadFolder("terrortown/lang/", true, CLIENT_FILE, function(path)
-		MsgN("Added TTT2 language file: ", path)
-	end)
-
 	-- load vskin files
-	fileloader.LoadFolder("terrortown/gamemode/shared/vskins/", false, CLIENT_FILE, function(path)
-		MsgN("Added TTT2 vskin file: ", path)
-	end)
-
 	fileloader.LoadFolder("terrortown/vskin/", false, CLIENT_FILE, function(path)
 		MsgN("Added TTT2 vskin file: ", path)
 	end)
@@ -178,6 +186,8 @@ function GM:Initialize()
 	local skinName = vskin.GetVSkinName()
 
 	vskin.UpdatedVSkin(skinName, skinName)
+
+	keyhelp.InitializeBasicKeys()
 
 	---
 	-- @realm client
@@ -221,35 +231,29 @@ function GM:InitPostEntity()
 	items.MigrateLegacyItems()
 	items.OnLoaded()
 
+	-- load all HUDs
+	huds.OnLoaded()
+
+	-- load all HUD elements
+	hudelements.OnLoaded()
+
 	HUDManager.LoadAllHUDS()
 	HUDManager.SetHUD()
-
-	InitDefaultEquipment()
-
-	local itms = items.GetList()
-
-	-- load items
-	for i = 1, #itms do
-		local itm = itms[i]
-
-		ShopEditor.InitDefaultData(itm) -- initialize the default data
-		CreateEquipment(itm) -- init items
-
-		itm.CanBuy = {} -- reset normal items equipment
-
-		itm:Initialize()
-	end
 
 	local sweps = weapons.GetList()
 
 	-- load sweps
 	for i = 1, #sweps do
-		local wep = sweps[i]
+		local eq = sweps[i]
 
-		ShopEditor.InitDefaultData(wep) -- init normal weapons equipment
-		CreateEquipment(wep) -- init weapons
+		-- Check if an equipment has an id or ignore it
+		-- @realm server
+		if not hook.Run("TTT2RegisterWeaponID", eq) then continue end
 
-		wep.CanBuy = {} -- reset normal weapons equipment
+		-- Insert data into role fallback tables
+		InitDefaultEquipment(eq)
+
+		eq.CanBuy = {} -- reset normal weapons equipment
 	end
 
 	local roleList = roles.GetList()
@@ -276,6 +280,7 @@ function GM:InitPostEntity()
 
 	net.Start("TTT2SyncShopsWithServer")
 	net.SendToServer()
+	TTT2ShopFallbackInitialized = true
 
 	net.Start("TTT_Spectate")
 	net.WriteBool(GetConVar("ttt_spectator_mode"):GetBool())
@@ -330,11 +335,33 @@ function GM:OnReloaded()
 	-- @realm shared
 	hook.Run("TTT2BaseRoleInit")
 
+	-- load all items
+	items.OnLoaded()
+
+	-- load all HUDs
+	huds.OnLoaded()
+
+	-- load all HUD elements
+	hudelements.OnLoaded()
+
+	-- re-request the HUD to be loaded
+	HUDManager.LoadAllHUDS()
+	HUDManager.SetHUD()
+
+	ARMOR:Initialize()
+	SPEED:Initialize()
+
 	-- rebuild menues on game reload
 	vguihandler.Rebuild()
 
 	local skinName = vskin.GetVSkinName()
 	vskin.UpdatedVSkin(skinName, skinName)
+
+	keyhelp.InitializeBasicKeys()
+
+	---
+	-- @realm client
+	hook.Run("TTT2FinishedLoading")
 end
 
 ---
@@ -395,7 +422,7 @@ local function RoundStateChange(o, n)
 
 		-- people may have died and been searched during prep
 		for i = 1, #plys do
-			plys[i].search_result = nil
+			bodysearch.ResetSearchResult(plys[i])
 		end
 
 		-- clear blood decals produced during prep
@@ -538,7 +565,6 @@ function GM:ClearClientState()
 	client.last_id = nil
 	client.radio = nil
 	client.called_corpses = {}
-	client.sprintProgress = 1
 
 	client:SetTargetPlayer(nil)
 
@@ -554,7 +580,7 @@ function GM:ClearClientState()
 
 		pl:SetRole(ROLE_NONE)
 
-		pl.search_result = nil
+		bodysearch.ResetSearchResult(pl)
 	end
 
 	VOICE.CycleMuteState(MUTE_NONE)
@@ -601,12 +627,6 @@ function GM:CleanUpMap()
 	game.CleanUpMap()
 end
 
-net.Receive("TTT2SyncDBItems", function()
-	if not ShopEditor then return end
-
-	ShopEditor.ReadItemData()
-end)
-
 -- server tells us to call this when our LocalPlayer has spawned
 local function PlayerSpawn()
 	local as_spec = net.ReadBit() == 1
@@ -634,7 +654,7 @@ net.Receive("TTT_PlayerDied", PlayerDeath)
 -- Called to determine if the LocalPlayer should be drawn.
 -- @note If you're using this hook to draw a @{Player} for a @{GM:CalcView} hook,
 -- then you may want to consider using the drawviewer variable you can use in your
--- <a href="https://wiki.garrysmod.com/page/Structures/CamData">CamData structure</a>
+-- <a href="https://wiki.facepunch.com/gmod/Structures/CamData">CamData structure</a>
 -- table instead.
 -- @important You should visit the linked reference, there could be related issues
 -- @param Player ply The @{Player}
@@ -658,7 +678,7 @@ local view = {origin = vector_origin, angles = angle_zero, fov = 0}
 -- @param number znear Distance to near clipping plane
 -- @param number zfar Distance to far clipping plane
 -- @return table View data table. See
--- <a href="https://wiki.garrysmod.com/page/Structures/CamData">CamData structure</a>
+-- <a href="https://wiki.facepunch.com/gmod/Structures/CamData">CamData structure</a>
 -- structure
 -- @hook
 -- @realm client
@@ -846,3 +866,14 @@ net.Receive("TTT2PlayerAuthedShared", function(len)
 	-- @realm shared
 	hook.Run("TTT2PlayerAuthed", steamid64, name)
 end)
+
+---
+-- This hook is called once after the player authentificated. It is a mirror of
+-- @{GM:PlayerAuthed} that relays this information for every player to the client.
+-- @param string steamID64 The player's steamID64
+-- @param string name The player's name
+-- @hook
+-- @realm client
+function GM:TTT2PlayerAuthed(steamID64, name)
+
+end

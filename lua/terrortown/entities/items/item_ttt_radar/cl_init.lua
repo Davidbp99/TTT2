@@ -88,6 +88,22 @@ function ITEM:DrawInfo()
 	return math.ceil(math.max(0, (LocalPlayer().radarTime or 30) - (CurTime() - RADAR.startTime)))
 end
 
+---
+-- @ignore
+function ITEM:AddToSettingsMenu(parent)
+	local form = vgui.CreateTTT2Form(parent, "header_equipment_additional")
+
+	form:MakeSlider({
+		serverConvar = "ttt2_radar_charge_time",
+		label = "label_radar_charge_time",
+		min = 0,
+		max = 60,
+		decimal = 0
+	})
+end
+
+
+
 local function DrawTarget(tgt, size, offset, no_shrink)
 	local scrpos = tgt.pos:ToScreen() -- sweet
 	local sz = (util.IsOffScreen(scrpos) and not no_shrink) and (size * 0.5) or size
@@ -344,11 +360,7 @@ function RADAR.CreateMenu(parent, frame)
 	dform:AddItem(dcheck)
 
 	dform.Think = function(s)
-		if RADAR.repeating or not owned then
-			dscan:SetDisabled(true)
-		else
-			dscan:SetDisabled(false)
-		end
+		dscan:SetEnabled(not RADAR.repeating and owned)
 	end
 
 	dform:SetVisible(true)

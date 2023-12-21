@@ -5,7 +5,6 @@ local net = net
 local sql = sql
 local util = util
 
-util.AddNetworkString("newshop")
 util.AddNetworkString("TTT2UpdateCVar")
 
 net.Receive("TTT2UpdateCVar", function(_, ply)
@@ -19,23 +18,6 @@ net.Receive("TTT2UpdateCVar", function(_, ply)
 end)
 
 ShopEditor.ShopTablePre = "ttt2_shop_"
-
----
--- Opens the ShopEditor for a specific @{Player}
--- @note Just admins are allowed to do so!
--- @param Player ply
--- @param string cmd
--- @param any args
--- @realm server
-function ShopEditor.ShopEditor(ply, cmd, args)
-	if ply:IsAdmin() then
-		net.Start("newshop")
-		net.Send(ply)
-	else
-		ply:ChatPrint("[TTT2][INFO] You need to be an admin to access the ShopEditor!")
-	end
-end
-concommand.Add("shopeditor", ShopEditor.ShopEditor)
 
 ---
 -- Initializes the SQL database for the ShopEditor
@@ -154,20 +136,6 @@ local function shop(len, ply)
 end
 net.Receive("shop", shop)
 
-util.AddNetworkString("TTT2SESaveItem")
-
-local function TTT2SESaveItem(len, ply)
-	if not IsValid(ply) or not ply:IsAdmin() then return end
-
-	local name, item = ShopEditor.ReadItemData()
-
-	if not item then return end
-
-	ShopEditor.WriteItemData("TTT2SESaveItem", name, item)
-	sql.Save("ttt2_items", name, item, ShopEditor.savingKeys)
-end
-net.Receive("TTT2SESaveItem", TTT2SESaveItem)
-
 util.AddNetworkString("shopFallback")
 util.AddNetworkString("shopFallbackAnsw")
 util.AddNetworkString("shopFallbackReset")
@@ -190,7 +158,7 @@ net.Receive("shopFallback", shopFallback)
 -- the shops if needed
 -- @param number subrole subrole id of a @{ROLE}
 -- @param string fallback the fallback @{ROLE}'s name
--- @param nil|Player|table if this is nil, it will be broadcasted to every available @{Player}
+-- @param nil|Player|table ply_or_rf if this is nil, it will be broadcasted to every available @{Player}
 -- @realm server
 -- @internal
 function ShopEditor.OnChangeWSCVar(subrole, fallback, ply_or_rf)

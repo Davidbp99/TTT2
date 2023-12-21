@@ -90,6 +90,8 @@ resource.AddFile("materials/vgui/ttt/perks/hud_armor.png") -- armor HUD
 resource.AddFile("materials/vgui/ttt/perks/hud_armor_reinforced.png") -- armor reinforced HUD
 resource.AddFile("materials/vgui/ttt/hud_armor.vmt") -- playerinfo armor
 resource.AddFile("materials/vgui/ttt/hud_armor_reinforced.vmt") -- playerinfo armor reinforced
+resource.AddFile("materials/vgui/ttt/hud_health.vmt") -- playerinfo health
+resource.AddFile("materials/vgui/ttt/hud_health_low.vmt") -- playerinfo health low
 
 resource.AddFile("materials/vgui/ttt/hud_blocking_revival.vmt")
 
@@ -111,6 +113,8 @@ resource.AddFile("materials/vgui/ttt/perks/hud_noenergydmg.png")
 resource.AddFile("materials/vgui/ttt/icon_nohazarddmg.vmt")
 resource.AddFile("materials/vgui/ttt/perks/hud_nohazarddmg.png")
 
+resource.AddFile("materials/vgui/ttt/icon_magneto_stick.vmt")
+
 -- pickup symbols
 resource.AddFile("materials/vgui/ttt/pickup/icon_heavy.png")
 resource.AddFile("materials/vgui/ttt/pickup/icon_pistol.png")
@@ -119,11 +123,6 @@ resource.AddFile("materials/vgui/ttt/pickup/icon_special.png")
 resource.AddFile("materials/vgui/ttt/pickup/icon_extra.png")
 resource.AddFile("materials/vgui/ttt/pickup/icon_class.png")
 resource.AddFile("materials/vgui/ttt/pickup/icon_ammo.png")
-
--- loading screen
-resource.AddFile("materials/vgui/ttt/loadingscreen/loading.vtf")
-resource.AddFile("materials/vgui/ttt/loadingscreen/img/bg.jpg")
-resource.AddFile("materials/vgui/ttt/loadingscreen/img/ttt2_loading_logo.png")
 
 -- dmgindicator themes
 resource.AddFile("materials/vgui/ttt/dmgindicator/themes/default.png")
@@ -135,6 +134,21 @@ resource.AddFile("materials/vgui/ttt/tid/tid_big_role_not_known.vmt")
 resource.AddFile("materials/vgui/ttt/tid/tid_big_corpse.vmt")
 resource.AddFile("materials/vgui/ttt/tid/tid_big_tbutton_pointer.vmt")
 resource.AddFile("materials/vgui/ttt/tid/tid_big_door.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_deagle.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_mac10.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_pistol.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_random.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_rifle.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_ammo_shotgun.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_player.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_assault.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_melee.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_nade.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_pistol.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_random.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_shotgun.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_sniper.vmt")
+resource.AddFile("materials/vgui/ttt/tid/tid_big_weapon_special.vmt")
 
 -- target ID inline icons
 resource.AddFile("materials/vgui/ttt/tid/tid_credits.vmt")
@@ -143,6 +157,21 @@ resource.AddFile("materials/vgui/ttt/tid/tid_locked.vmt")
 resource.AddFile("materials/vgui/ttt/tid/tid_auto_close.vmt")
 resource.AddFile("materials/vgui/ttt/tid/tid_destructible.vmt")
 
+resource.AddFile("materials/vgui/ttt/tid/tid_ammo.vmt")
+
+-- ammo icons
+resource.AddFile("materials/vgui/ttt/ammo/box_357.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/box_alyxgun.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/box_buckshot.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/box_pistol.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/box_smg1.vmt")
+
+resource.AddFile("materials/vgui/ttt/ammo/bullet_357.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/bullet_alyxgun.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/bullet_buckshot.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/bullet_pistol.vmt")
+resource.AddFile("materials/vgui/ttt/ammo/bullet_smg1.vmt")
+
 -- derma skin graphics
 resource.AddFile("materials/vgui/ttt/vskin/icon_close.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/icon_back.vmt")
@@ -150,6 +179,10 @@ resource.AddFile("materials/vgui/ttt/vskin/icon_collapse_closed.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/icon_collapse_opened.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/icon_reset.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/icon_disable.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/icon_headbox_yes.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/icon_headbox_no.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/icon_hattable_yes.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/icon_hattable_no.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/rhombus.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/helpscreen/addons.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/helpscreen/appearance.vmt")
@@ -162,6 +195,8 @@ resource.AddFile("materials/vgui/ttt/vskin/helpscreen/legacy.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/helpscreen/equipment.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/helpscreen/shops.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/helpscreen/administration.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/helpscreen/roles.vmt")
+resource.AddFile("materials/vgui/ttt/vskin/markers/builtin.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/roundend/events.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/roundend/info.vmt")
 resource.AddFile("materials/vgui/ttt/vskin/events/base_event.vmt")
@@ -193,3 +228,41 @@ resource.AddFile("materials/vgui/ttt/dnascanner/dna_hud.vmt")
 -- b-draw icons
 resource.AddFile("materials/vgui/ttt/b-draw/icon_avatar_bot.vmt")
 resource.AddFile("materials/vgui/ttt/b-draw/icon_avatar_default.vmt")
+
+-- keyhelper icons
+resource.AddFile("materials/vgui/ttt/hudhelp/chat_global.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/chat_team.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/flashlight.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/item_disguiser.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/leave_target.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/mute.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/player.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/player_next.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/player_prev.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/player_random.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/pointer.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/possessing.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_back.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_front.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_jump.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_left.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_right.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/quickchat.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/save.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/settings.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/shoppingrole.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/showmore.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/third_person.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/voice_global.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/voice_team.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/ammo_drop.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/weapon_drop.vmt")
+resource.AddFile("materials/vgui/ttt/hudhelp/prop_das.vmt")
+
+-- bodysearch icons
+resource.AddFile("materials/vgui/ttt/icon_credits.vmt")
+resource.AddFile("materials/vgui/ttt/icon_credits_transparent.vmt")
+resource.AddFile("materials/vgui/ttt/icon_floor.vmt")
+resource.AddFile("materials/vgui/ttt/icon_water_1.vmt")
+resource.AddFile("materials/vgui/ttt/icon_water_2.vmt")
+resource.AddFile("materials/vgui/ttt/icon_water_3.vmt")

@@ -1,6 +1,6 @@
 ---
 -- Shared extensions to player table
--- @ref https://wiki.garrysmod.com/page/Category:Player
+-- @ref https://wiki.facepunch.com/gmod/Player
 -- @class Player
 
 local net = net
@@ -9,11 +9,25 @@ local IsValid = IsValid
 local hook = hook
 local math = math
 
+---@class Player
 local plymeta = FindMetaTable("Player")
 if not plymeta then
 	Error("FAILED TO FIND PLAYER TABLE")
 
 	return
+end
+
+---
+-- @internal
+-- @realm shared
+function plymeta:SetupDataTables()
+	-- This has to be transferred, because we need the value when predicting the player movement
+	-- It turned out that this is the only reliable way to fix all prediction errors.
+	self:NetworkVar("Float", 0, "SprintStamina")
+
+	if SERVER then
+		self:SetSprintStamina(1)
+	end
 end
 
 ---
@@ -84,7 +98,7 @@ function plymeta:SetRole(subrole, team, forceHooks, suppressEvent)
 	self.subrole = subrole
 
 	-- this update team hook should suppress the event trigger
-	self:UpdateTeam(team or roleData.defaultTeam or TEAM_NONE, true)
+	self:UpdateTeam(team or roleData.defaultTeam or TEAM_NONE, true, true)
 
 	local newBaseRole = self:GetBaseRole()
 	local newTeam = self:GetTeam()
@@ -132,7 +146,7 @@ function plymeta:SetRole(subrole, team, forceHooks, suppressEvent)
 		hook.Run("TTT2UpdateTeam", self, oldTeam, newTeam)
 	end
 
-	if SERVER and not suppressEvent and (oldRole ~= subrole or oldTeam ~= newTeam or forceHooks) then
+	if SERVER and not suppressEvent and (oldSubrole ~= subrole or oldTeam ~= newTeam or forceHooks) then
 		events.Trigger(EVENT_ROLECHANGE, self, oldSubrole, subrole, oldTeam, newTeam)
 	end
 
@@ -149,7 +163,7 @@ function plymeta:SetRole(subrole, team, forceHooks, suppressEvent)
 			hook.Run("PlayerLoadout", self, false)
 
 			-- Don't update the model if oldSubrole is nil (player isn't already spawned, leading to an initialization error)
-			if GetConVar("ttt_enforce_playermodel"):GetBool() and oldSubrole then
+			if oldSubrole and GetConVar("ttt_enforce_playermodel"):GetBool() then
 				-- update subroleModel
 				self:SetModel(self:GetSubRoleModel())
 			end
@@ -304,8 +318,9 @@ end
 -- @warning @{plymeta:SetRole} should be used BEFORE calling this function!
 -- @param string team a @{ROLE}'s team
 -- @param boolean suppressEvent Set this to true if no rolechange event should be triggered
+-- @param boolean suppressHook Set this to true if no updateTeam hook should be triggered
 -- @realm shared
-function plymeta:UpdateTeam(team, suppressEvent)
+function plymeta:UpdateTeam(team, suppressEvent, suppressHook)
 	if team == TEAM_NOCHANGE then return end
 
 	local oldTeam = self:GetTeam()
@@ -314,16 +329,18 @@ function plymeta:UpdateTeam(team, suppressEvent)
 
 	local newTeam = self:GetTeam()
 
-	if oldTeam ~= newTeam then
+	if oldTeam == newTeam then return end
+
+	if not suppressHook then
 		---
 		-- @realm shared
 		hook.Run("TTT2UpdateTeam", self, oldTeam, newTeam)
+	end
 
-		if SERVER and not suppressEvent then
-			local subrole = self:GetSubRole()
+	if SERVER and not suppressEvent then
+		local subrole = self:GetSubRole()
 
-			events.Trigger(EVENT_ROLECHANGE, self, subrole, subrole, oldTeam, newTeam)
-		end
+		events.Trigger(EVENT_ROLECHANGE, self, subrole, subrole, oldTeam, newTeam)
 	end
 end
 
@@ -441,12 +458,30 @@ plymeta.IsTraitor = plymeta.GetTraitor
 plymeta.IsDetective = plymeta.GetDetective
 
 ---
--- Checks whether a @{Player} has a special @{ROLE}
--- @note This just returns <code>false</code> if the @{Player} is an Innocent!
--- @return boolean
+-- Checks whether a @{Player} has a special @{ROLE}.
+-- @note This just returns <code>false</code> if the @{Player} is an Innocent or has no role!
+-- @return boolean Returns true if the player has a special role
 -- @realm shared
-function plymeta:IsSpecial()
-	return self:GetSubRole() ~= ROLE_INNOCENT
+function plymeta:HasSpecialRole()
+	return self:GetSubRole() ~= ROLE_INNOCENT and self:GetSubRole() ~= ROLE_NONE
+end
+
+---
+-- Checks whether a @{Player} has a special @{ROLE}.
+-- @note This just returns <code>false</code> if the @{Player} is an Innocent!
+-- @return boolean Returns true if the player has a special role
+-- @see Player:HasSpecialRole
+-- @realm shared
+-- @deprecated
+-- @function plymeta:IsSpecial()
+plymeta.IsSpecial = plymeta.HasSpecialRole
+
+---
+-- Checks whether or not a player has an evil team. By default all teams that aren't innocent or none are counted as evil.
+-- @return boolean Returns true if the role is evil
+-- @realm shared
+function plymeta:HasEvilTeam()
+	return util.IsEvilTeam(self:GetTeam())
 end
 
 ---
@@ -522,9 +557,9 @@ end
 -- @return boolean
 -- @realm shared
 -- @see Player:IsActive
--- @see Player:IsSpecial
+-- @see Player:HasSpecialRole
 function plymeta:IsActiveSpecial()
-	return self:IsActive() and self:IsSpecial()
+	return self:IsActive() and self:HasSpecialRole()
 end
 
 ---
@@ -788,7 +823,7 @@ end
 -- never use cursor tracing anyway.
 -- @param MASK mask The trace mask. This determines what the trace should hit and what it shouldn't hit.
 -- A mask is a combination of CONTENTS_Enums - you can use these for more advanced masks.
--- @ref https://wiki.garrysmod.com/page/Structures/Trace
+-- @ref https://wiki.facepunch.com/gmod/Structures/Trace
 -- @realm shared
 function plymeta:GetEyeTrace(mask)
 	mask = mask or MASK_SOLID
@@ -918,7 +953,7 @@ end
 -- @return boolean
 -- @realm shared
 function plymeta:WasRevivedAndConfirmed()
-	return not self:TTT2NETGetBool("body_found", false) and self:OnceFound()
+	return not self:IsSpec() and not self:TTT2NETGetBool("body_found", false) and self:OnceFound()
 end
 
 ---
@@ -959,12 +994,13 @@ function plymeta:SetModel(mdlName)
 	local mdl
 
 	local curMdl = mdlName or self:GetModel()
+
 	if not checkModel(curMdl) then
 		curMdl = self.defaultModel
 
 		if not checkModel(curMdl) then
 			if not checkModel(GAMEMODE.playermodel) then
-				GAMEMODE.playermodel = GAMEMODE.force_plymodel == "" and GetRandomPlayerModel() or GAMEMODE.force_plymodel
+				GAMEMODE.playermodel = GAMEMODE.force_plymodel
 
 				if not checkModel(GAMEMODE.playermodel) then
 					GAMEMODE.playermodel = "models/player/phoenix.mdl"
@@ -1029,7 +1065,15 @@ end
 -- @return boolean The blocking status
 -- @realm shared
 function plymeta:IsBlockingRevival()
-	return self.isBlockingRevival or false
+	return self.revivalBlockMode and self.revivalBlockMode > REVIVAL_BLOCK_NONE
+end
+
+---
+-- Returns the blocking mode of the ongoing revival.
+-- @return number The blocking mode
+-- @realm shared
+function plymeta:GetRevivalBlockMode()
+	return self.revivalBlockMode or REVIVAL_BLOCK_NONE
 end
 
 ---
@@ -1079,4 +1123,96 @@ end
 -- @realm shared
 function plymeta:WasRevivedInRound()
 	return self:HasDiedInRound()
+end
+
+---
+-- A hook that is called on the change of a role. It is called once for the old role
+-- and once for the new role if some criteria are met.
+-- @param ROLE roleData The roledata of the rolechange
+-- @param boolean isNewRole True if it is the new role, false if it is the old role
+-- @hook
+-- @realm shared
+function GM:TTT2ToggleRole(roleData, isNewRole)
+
+end
+
+---
+-- This hook is called on the change of a player's base role.
+-- @param Player ply The player whose role is changed
+-- @param number oldBaserole The numeric identifier of the old role
+-- @param number newBaserole The numeric identifier of the new role
+-- @hook
+-- @realm shared
+function GM:TTT2UpdateBaserole(ply, oldBaserole, newBaserole)
+
+end
+
+---
+-- This hook is called on the change of a player's sub role.
+-- @param Player ply The player whose role is changed
+-- @param number oldSubrole The numeric identifier of the old role
+-- @param number newSubrole The numeric identifier of the new role
+-- @hook
+-- @realm shared
+function GM:TTT2UpdateSubrole(ply, oldSubrole, newSubrole)
+
+end
+
+---
+-- This hook is called on the change of a player's team.
+-- @param Player ply The player whose team is changed
+-- @param string oldTeam The identifier of the old team
+-- @param string newTeam The identifier of the new team
+-- @hook
+-- @realm shared
+function GM:TTT2UpdateTeam(ply, oldTeam, newTeam)
+
+end
+
+---
+-- This hook is called (mostly on rolechanges) when the player's role color
+-- is set and can be used to modify the color.
+-- @param Player ply The player whose role color is set
+-- @param Color clr The color that should be used
+-- @return nil|Color The new color that is intended for the player
+-- @hook
+-- @realm shared
+function GM:TTT2ModifyRoleColor(ply, clr)
+
+end
+
+---
+-- This hook is called (mostly on rolechanges) when the player's darkened role color
+-- is set and can be used to modify the color.
+-- @param Player ply The player whose role color is set
+-- @param Color clr The color that should be used
+-- @return nil|Color The new color that is intended for the player
+-- @hook
+-- @realm shared
+function GM:TTT2ModifyRoleDkColor(ply, clr)
+
+end
+
+---
+-- This hook is called (mostly on rolechanges) when the player's lightened role color
+-- is set and can be used to modify the color.
+-- @param Player ply The player whose role color is set
+-- @param Color clr The color that should be used
+-- @return nil|Color The new color that is intended for the player
+-- @hook
+-- @realm shared
+function GM:TTT2ModifyRoleLtColor(ply, clr)
+
+end
+
+---
+-- This hook is called (mostly on rolechanges) when the player's background role color
+-- is set and can be used to modify the color.
+-- @param Player ply The player whose role color is set
+-- @param Color clr The color that should be used
+-- @return nil|Color The new color that is intended for the player
+-- @hook
+-- @realm shared
+function GM:TTT2ModifyRoleBgColor(ply, clr)
+
 end

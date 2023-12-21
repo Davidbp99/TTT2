@@ -9,7 +9,6 @@ TTTFiles = {
 	cl_damage_indicator = {file = "cl_damage_indicator.lua", on = "client"},
 	cl_equip = {file = "cl_equip.lua", on = "client"},
 	cl_eventpopup = {file = "cl_eventpopup.lua", on = "client"},
-	cl_help_data = {file = "cl_help_data.lua", on = "client"},
 	cl_help = {file = "cl_help.lua", on = "client"},
 	cl_hud_editor = {file = "cl_hud_editor.lua", on = "client"},
 	cl_hud_manager = {file = "cl_hud_manager.lua", on = "client"},
@@ -54,6 +53,7 @@ TTTFiles = {
 	sh_main = {file = "sh_main.lua", on = "shared"},
 	sh_network_sync = {file = "sh_network_sync.lua", on = "shared"},
 	sh_player_ext = {file = "sh_player_ext.lua", on = "shared"},
+	sh_playerclass = { file = "sh_playerclass.lua", on = "shared" },
 	sh_printmessage_override = {file = "sh_printmessage_override.lua", on = "shared"},
 	sh_cvar_handler = {file = "sh_cvar_handler.lua", on = "shared"},
 	sh_role_module = {file = "sh_role_module.lua", on = "shared"},
@@ -75,8 +75,6 @@ TTTFiles = {
 	vgui__cl_sb_row = {file = "vgui/cl_sb_row.lua", on = "client"},
 	vgui__cl_sb_team = {file = "vgui/cl_sb_team.lua", on = "client"},
 	vgui__cl_scrolllabel = {file = "vgui/cl_scrolllabel.lua", on = "client"},
-	vgui__cl_shopeditor_buttons = {file = "vgui/cl_shopeditor_buttons.lua", on = "client"},
-	vgui__cl_shopeditor_slider = {file = "vgui/cl_shopeditor_slider.lua", on = "client"},
 	vgui__cl_simpleclickicon = {file = "vgui/cl_simpleclickicon.lua", on = "client"},
 	vgui__cl_simpleicon = {file = "vgui/cl_simpleicon.lua", on = "client"},
 	vgui__cl_simpleroleicon = {file = "vgui/cl_simpleroleicon.lua", on = "client"},
@@ -84,11 +82,14 @@ TTTFiles = {
 	-- cl_vskin client files
 	cl_vskin__default_skin = {file = "cl_vskin/default_skin.lua", on = "client"},
 	cl_vskin__vgui__dpanel = {file = "cl_vskin/vgui/dpanel_ttt2.lua", on = "client"},
+	cl_vskin__vgui__droleimage = {file = "cl_vskin/vgui/droleimage_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dframe = {file = "cl_vskin/vgui/dframe_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dimagecheckbox = {file = "cl_vskin/vgui/dimagecheckbox_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dmenubutton = {file = "cl_vskin/vgui/dmenubutton_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dsubmenubutton = {file = "cl_vskin/vgui/dsubmenubutton_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dnavpanel = {file = "cl_vskin/vgui/dnavpanel_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dcontentpanel = {file = "cl_vskin/vgui/dcontentpanel_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dcard = {file = "cl_vskin/vgui/dcard_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dbuttonpanel = {file = "cl_vskin/vgui/dbuttonpanel_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dcategoryheader = {file = "cl_vskin/vgui/dcategoryheader_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dcategorycollapse = {file = "cl_vskin/vgui/dcategorycollapse_ttt2.lua", on = "client"},
@@ -99,6 +100,7 @@ TTTFiles = {
 	cl_vskin__vgui__dcombobox = {file = "cl_vskin/vgui/dcombobox_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dcheckboxlabel = {file = "cl_vskin/vgui/dcheckboxlabel_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dnumslider = {file = "cl_vskin/vgui/dnumslider_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dtextentry = {file = "cl_vskin/vgui/dtextentry_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dbinderpanel = {file = "cl_vskin/vgui/dbinderpanel_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dscrollpanel = {file = "cl_vskin/vgui/dscrollpanel_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dvscrollbar = {file = "cl_vskin/vgui/dvscrollbar_ttt2.lua", on = "client"},
@@ -106,6 +108,13 @@ TTTFiles = {
 	cl_vskin__vgui__dcoloredtextbox = {file = "cl_vskin/vgui/dcoloredtextbox_ttt2.lua", on = "client"},
 	cl_vskin__vgui__dtooltip = {file = "cl_vskin/vgui/dtooltip_ttt2.lua", on = "client"},
 	cl_vskin__vgui__deventbox = {file = "cl_vskin/vgui/deventbox_ttt2.lua", on = "client"},
+	cl_vskin__vgui__ddragbase = {file = "cl_vskin/vgui/ddragbase_ttt2.lua", on = "client"},
+	cl_vskin__vgui__drolelayeringreceiver = {file = "cl_vskin/vgui/drolelayeringreceiver_ttt2.lua", on = "client"},
+	cl_vskin__vgui__drolelayeringsender = {file = "cl_vskin/vgui/drolelayeringsender_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dsearchbar = {file = "cl_vskin/vgui/dsearchbar_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dsubmenulist = {file = "cl_vskin/vgui/dsubmenulist_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dinfoitem = {file = "cl_vskin/vgui/dinfoitem_ttt2.lua", on = "client"},
+	cl_vskin__vgui__dprofilepanel = {file = "cl_vskin/vgui/dprofilepanel_ttt2.lua", on = "client"}
 }
 
 if SERVER then
@@ -121,7 +130,6 @@ if SERVER then
 		sv_hud_manager = {file = "sv_hud_manager.lua", on = "server"},
 		sv_inventory = {file = "sv_inventory.lua", on = "server"},
 		sv_karma = {file = "sv_karma.lua", on = "server"},
-		sv_loadingscreen = {file = "sv_loadingscreen.lua", on = "server"},
 		sv_main = {file = "sv_main.lua", on = "server"},
 		sv_networking = {file = "sv_networking.lua", on = "server"},
 		sv_network_sync = {file = "sv_network_sync.lua", on = "server"},
@@ -173,4 +181,14 @@ function ttt_include(filename)
 	if not file then return end
 
 	include(file)
+end
+
+---
+-- Called after creating the filetable of files that should be loaded, can be used
+-- to modify which files should be loaded
+-- @param table fileTbl The table of files that should be loaded
+-- @hook
+-- @realm shared
+function GM:TTT2ModifyFiles(fileTbl)
+
 end

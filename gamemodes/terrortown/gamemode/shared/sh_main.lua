@@ -4,14 +4,172 @@
 local IsValid = IsValid
 local hook = hook
 local team = team
-local UpdateSprint = UpdateSprint
 
 local MAX_DROWN_TIME = 8
 
 local sneakSpeedSquared = math.pow(150, 2)
 
+TTT2ShopFallbackInitialized = false
+
+local callbackIdentifier = "TTT2RegisteredSWEPCallback"
+
 ---
--- Initializes TTT2
+-- Add callback for equipment and insert changes in the given equipmentTable
+-- @param string name the database-name of the equipment
+-- @param table equipmentTable the table to insert changes to
+-- @realm shared
+local function AddCallbacks(name, equipmentTable)
+	-- Make sure that on hot reloads old callbacks are removed before adding the new one
+	database.RemoveChangeCallback(ShopEditor.accessName, name, nil, callbackIdentifier)
+	database.AddChangeCallback(ShopEditor.accessName, name, nil, function(accessName, itemName, key, oldValue, newValue)
+		if not istable(equipmentTable) then
+			database.RemoveChangeCallback(ShopEditor.accessName, name, nil, callbackIdentifier)
+
+			return
+		end
+
+		equipmentTable[key] = newValue
+	end, callbackIdentifier)
+end
+
+---
+-- Initializes the equipment with necessary data for ttt2
+-- Also handles hotreload when called with the `PreRegisterSWEP` hook
+-- @param table equipment equipment to register
+-- @param string name equipment name
+-- @param boolean initialize should the real weapon table be initialized and not hotreloaded?
+-- @internal
+-- @realm shared
+local function TTT2RegisterSWEP(equipment, name, initialize)
+	local doHotreload = TTT2ShopFallbackInitialized
+
+	-- Handle first initialization or do hotreload
+	if initialize then
+		equipment = weapons.GetStored(name)
+		doHotreload = false
+	elseif not doHotreload then
+		return
+	end
+
+	if doHotreload then
+		MsgN("[TTT2] Trying to hotreload ",  name, " .")
+	end
+
+	-- Initialize Equipment
+	AddEquipmentKeyValues(equipment, name)
+	ShopEditor.InitDefaultData(equipment)
+
+	if doHotreload then
+		local oldSWEP = weapons.GetStored(name)
+
+		-- Keep custom changed data from the old SWEP if hotReloadableKeys are given
+		if istable(equipment.HotReloadableKeys) and #equipment.HotReloadableKeys > 0 and oldSWEP then
+			MsgN("[TTT2] Hotreloading ",  #equipment.HotReloadableKeys, " given Keys from old SWEP-file.")
+
+			for _, keys in pairs(equipment.HotReloadableKeys) do
+				local eqKeyField = equipment
+				local oldKeyField = oldSWEP
+				local keyString = ""
+
+				-- If only a single key is given, not a table, convert it
+				if isstring(keys) then
+					keys = {keys}
+				end
+
+				if not istable(keys) then continue end
+
+				local continueOuterLoop = false
+				local counter = 0
+				local saveKey = keys[1]
+
+				for _, key in pairs(keys) do
+					if not isstring(key) or not oldKeyField then
+						continueOuterLoop = true
+
+						break
+					end
+
+
+					keyString = keyString .. "." .. key
+					counter = counter + 1
+					eqKeyField[key] = eqKeyField[key] or {}
+					oldKeyField = oldKeyField[key]
+
+					-- To keep eqKeyField as reference check for tables or create one
+					if counter < #keys and not istable(eqKeyField[key]) then
+						eqKeyField[key] = {}
+					elseif counter == #keys then
+						saveKey = key
+
+						break
+					end
+
+					eqKeyField = eqKeyField[key]
+				end
+
+				if continueOuterLoop then continue end
+
+				MsgN("[TTT2] Overwriting SWEP",  keyString, " = ", tostring(eqKeyField[saveKey]), " with ", tostring(oldKeyField))
+
+				eqKeyField[saveKey] = oldKeyField
+			end
+		end
+
+		ResetDefaultEquipment(equipment)
+	end
+
+	if SERVER and database.Register(ShopEditor.sqlItemsName, ShopEditor.accessName, ShopEditor.savingKeys, TTT2_DATABASE_ACCESS_ANY) then
+		database.SetDefaultValuesFromItem(ShopEditor.accessName, name, equipment)
+		local databaseExists, itemTable = database.GetValue(ShopEditor.accessName, name)
+		if databaseExists then
+			table.Merge(equipment, itemTable)
+		end
+		AddCallbacks(name, equipment)
+	elseif CLIENT then
+		database.GetValue(ShopEditor.accessName, name, nil, function(databaseExists, itemTable)
+			if databaseExists then
+				table.Merge(equipment, itemTable)
+				AddCallbacks(name, equipment)
+			end
+		end)
+	end
+
+	if not doHotreload then return end
+
+	-- initialize fallback shops
+	InitFallbackShops()
+
+	if SERVER then
+		LoadShopsEquipment()
+
+		-- Force Precache Models
+		if equipment.WorldModel then
+			util.PrecacheModel(equipment.WorldModel)
+		end
+
+		if equipment.ViewModel then
+			util.PrecacheModel(equipment.ViewModel)
+		end
+	elseif CLIENT then
+		TTT2CacheEquipMaterials(equipment)
+		net.Start("TTT2SyncShopsWithServer")
+		net.SendToServer()
+	end
+
+	MsgN("[TTT2] Hotreloading ", name, " was successful.")
+
+	return
+end
+
+---
+-- Runs before registering a weapon via the weapons module
+-- Also runs, when a SWEP-file is hotreloaded
+-- @realm shared
+hook.Add("PreRegisterSWEP", "TTT2RegisterSWEP", TTT2RegisterSWEP)
+
+---
+-- Called in @{GM:Initialize} as first call right before the TTT2 fileloader
+-- loads the vskin and language files.
 -- @hook
 -- @realm shared
 function GM:TTT2Initialize()
@@ -26,13 +184,22 @@ function GM:TTT2Initialize()
 	-- @realm shared
 	hook.Run("TTT2BaseRoleInit")
 
-	-- load all HUDs
-	huds.OnLoaded()
-
-	-- load all HUD elements
-	hudelements.OnLoaded()
-
 	DefaultEquipment = GetDefaultEquipment()
+end
+
+---
+-- @hook
+-- @realm shared
+function GM:TTT2FinishedLoading()
+
+end
+
+---
+-- Called after everything in the @{GM:Initialize} hook is called.
+-- @hook
+-- @realm shared
+function GM:PostInitialize()
+
 end
 
 ---
@@ -80,7 +247,7 @@ end
 -- This hook is called after @{GM:PlayerTick}.
 -- See <a href="https://wiki.facepunch.com/gmod/Game_Movement">Game Movement</a> for an explanation on the move system.
 -- @param Player ply The player
--- @param MoveData moveData Movement information
+-- @param CMoveData moveData Movement information
 -- @predicted
 -- @hook
 -- @realm shared
@@ -90,18 +257,20 @@ function GM:Move(ply, moveData)
 
 	local mul = ply:GetSpeedMultiplier()
 
-	if ply.sprintMultiplier and (ply.sprintProgress or 0) > 0 then
-		local sprintMultiplierModifier = {1}
-
-		---
-		-- @realm shared
-		hook.Run("TTT2PlayerSprintMultiplier", ply, sprintMultiplierModifier)
-
-		mul = mul * ply.sprintMultiplier * sprintMultiplierModifier[1]
-	end
+	mul = mul * SPRINT:HandleSpeedMultiplierCalculation(ply)
 
 	moveData:SetMaxClientSpeed(moveData:GetMaxClientSpeed() * mul)
 	moveData:SetMaxSpeed(moveData:GetMaxSpeed() * mul)
+end
+
+-- @param Player ply The player
+-- @param MoveData moveData Movement information
+-- @predicted
+-- @hook
+-- @realm shared
+-- @ref https://wiki.facepunch.com/gmod/GM:FinishMove
+function GM:FinishMove(ply, moveData)
+	SPRINT:HandleStaminaCalculation(ply)
 end
 
 local ttt_playercolors = {
@@ -165,11 +334,30 @@ end
 -- @realm shared
 -- @ref https://wiki.facepunch.com/gmod/GM:Think
 function GM:Think()
-	UpdateSprint()
-
 	if CLIENT then
 		EPOP:Think()
 	end
+end
+
+---
+-- Used to modify the player sprint speed modifier.
+-- @note This hook is predicted, it therefore hat to be run on the server and the client.
+-- @param Player ply The player whose sprint speed should be changed
+-- @param table sprintMultiplierModifier The modieable table with the sprint speed multiplier
+-- @hook
+-- @realm shared
+function GM:TTT2PlayerSprintMultiplier(ply, sprintMultiplierModifier) end
+
+---
+-- A hook that is called whenever the gamemode needs to check if the player is in the superadmin usergroup.
+-- This hook can be used to allow custom usergroups through these checks.
+-- @note This hook grants access to powerful functionality, such as the gamemode configuration, damage logs and player role information. Only allow usergroups that absolutely need such access.
+-- @param Player ply The player to be checked
+-- @return boolean if the player is a valid usergroup
+-- @hook
+-- @realm shared
+function GM:TTT2AdminCheck(ply)
+	return ply:IsSuperAdmin()
 end
 
 -- Drowning and such
@@ -296,10 +484,91 @@ function GM:TTT2PostCleanupMap()
 end
 
 ---
+-- This hook is run inside @{GM:InitPostEntity} prior to the initialization of items,
+-- @hook
+-- @realm shared
+function GM:TTTInitPostEntity()
+
+end
+
+---
+-- This hook is run inside @{GM:InitPostEntity} after all items are initialized.
+-- @hook
+-- @realm shared
+function GM:PostInitPostEntity()
+
+end
+
+---
+-- This hook is run on the initialization of the fallback shops.
+-- @hook
+-- @realm shared
+function GM:InitFallbackShops()
+
+end
+
+---
+-- This hook is run after the initialization of the fallback shops.
+-- @hook
+-- @realm shared
+function GM:LoadedFallbackShops()
+
+end
+
+---
 -- Called right after all doors are initialized on the map.
 -- @param table doorsTable A table with the newly registered door entities
 -- @hook
 -- @realm shared
 function GM:TTT2PostDoorSetup(doorsTable)
 
+end
+
+-- Called after all roles were loaded, @{ROLE:Preinitialize} and @{ROLE:Initialize} were called
+-- and their convars were set up.
+-- @hook
+-- @realm shared
+function GM:TTT2RolesLoaded()
+
+end
+
+-- Called after all roles were loaded, @{ROLE:Preinitialize} and @{ROLE:Initialize} were called
+-- and their convars were set up.
+-- @hook
+-- @realm shared
+function GM:TTT2BaseRoleInit()
+
+end
+
+---
+-- Called to register equipment and assign an id. Returns true if it is successfully registered.
+-- @param table eq the equipment copy to register with an id
+-- @return boolean if the eq is succesfully registered
+-- @hook
+-- @realm shared
+function GM:TTT2RegisterWeaponID(eq)
+	if eq.id then return true end
+
+	local class = WEPS.GetClass(eq)
+
+	TTT2RegisterSWEP(eq, class, true)
+
+	eq = weapons.Get(class)
+
+	if eq.id then
+		return true
+	end
+
+	local name = eq.PrintName or class
+
+	if name then
+		print(name .. " cant be assigned an id.")
+	else
+		print("No id could be assigned. Equipment has no name.")
+	end
+
+	ErrorNoHalt("[TTT2][IDCHECK][ERROR] Equipment is invalid after registration attempt and has no id.\n")
+	PrintTable(eq)
+
+	return false
 end

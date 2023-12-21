@@ -5,7 +5,7 @@
 KARMA = {
 	rememberedPlayers = {}, -- ply steamid -> karma table for disconnected players who might reconnect
 	karmaChanges = {}, -- ply steamid -> karma table for karma changes that will get applied at roundend
-	karmaChangesOld = {} -- ply steamid -> karma table for old karma changes after roundend 
+	karmaChangesOld = {} -- ply steamid -> karma table for old karma changes after roundend
 }
 
 -- Convars, more convenient access than GetConVar
@@ -141,7 +141,7 @@ end
 -- @note Reason is a string and will be displayed in the roundendscreen as tooltip, so use language localization or describe it properly
 -- @param Player ply
 -- @param number amount
--- @param string reason 
+-- @param string reason
 -- @realm server
 function KARMA.DoKarmaChange(ply, amount, reason)
 	ply:SetLiveKarma(math.Clamp(ply:GetLiveKarma() + amount, 0, config.max:GetFloat()))
@@ -153,7 +153,7 @@ end
 -- Saves changes to the live KARMA
 -- @param Player ply
 -- @param number amount
--- @param string reason 
+-- @param string reason
 -- @realm server
 -- @internal
 function KARMA.SaveKarmaChange(ply, amount, reason)
@@ -316,6 +316,8 @@ end
 -- @param Player ply
 -- @realm server
 function KARMA.ApplyKarma(ply)
+	if not KARMA.IsEnabled() then return end
+
 	local df = 1
 
 	-- any karma at 1000 or over guarantees a df of 1, only when it's lower do we
@@ -343,12 +345,15 @@ local function WasAvoidable(attacker, victim, dmginfo)
 	local infl = dmginfo:GetInflictor()
 
 	if attacker:IsInTeam(victim) and IsValid(infl) and infl.Avoidable ~= false then
+		local victimRoleData = victim:GetSubRoleData()
+
 		---
 		-- @realm server
-		local ret = hook.Run("TTT2KarmaPenaltyMultiplier", attacker, victim, dmginfo)
-		if ret then
-			return ret
-		elseif victim:GetBaseRole() == ROLE_DETECTIVE then
+		local mutiplier = hook.Run("TTT2KarmaPenaltyMultiplier", attacker, victim, dmginfo)
+
+		if mutiplier then
+			return mutiplier
+		elseif victimRoleData.isPublicRole and victimRoleData.isPolicingRole then
 			return 2
 		elseif not attacker:GetSubRoleData().unknownTeam then
 			return 1
@@ -366,27 +371,35 @@ end
 -- damage factor of the attacker.
 -- @param Player attacker
 -- @param Player victim
--- @param DamageInfo dmginfo
+-- @param CTakeDamageInfo dmginfo
 -- @realm server
 function KARMA.Hurt(attacker, victim, dmginfo)
-	if attacker == victim or not IsValid(attacker) or not IsValid(victim) or not attacker:IsPlayer() or not victim:IsPlayer() or dmginfo:GetDamage() <= 0 then return end
+	if attacker == victim
+		or not IsValid(attacker)
+		or not IsValid(victim)
+		or not attacker:IsPlayer()
+		or not victim:IsPlayer()
+		or dmginfo:GetDamage() <= 0
+	then return end
 
 	-- Ignore excess damage
 	local hurt_amount = math.min(victim:Health(), dmginfo:GetDamage())
 
-	-- team kills another team
+	local attackerRoleData = attacker:GetSubRoleData()
+
+	-- team hurts another team
 	if not attacker:IsInTeam(victim) then
-		if attacker:GetSubRoleData().unknownTeam then
-			local reward = KARMA.GetHurtReward(hurt_amount)
+		if attackerRoleData.unknownTeam then
+			local reward = KARMA.GetHurtReward(hurt_amount) * attackerRoleData.karma.enemyHurtBonusMultiplier
 
 			reward = KARMA.GiveReward(attacker, reward, KARMA.reason[KARMA_ENEMYHURT])
 
 			print(Format("%s (%f) hurt %s (%f) and gets REWARDED %f", attacker:Nick(), attacker:GetLiveKarma(), victim:Nick(), victim:GetLiveKarma(), reward))
 		end
-	else -- team kills own team
+	else -- team hurts own team
 		if not victim:GetCleanRound() then return end
 
-		local multiplicator = WasAvoidable(attacker, victim, dmginfo)
+		local multiplicator = WasAvoidable(attacker, victim, dmginfo) * attackerRoleData.karma.teamHurtPenaltyMultiplier
 		local penalty = KARMA.GetHurtPenalty(victim:GetLiveKarma(), hurt_amount) * multiplicator
 
 		KARMA.GivePenalty(attacker, penalty, victim, KARMA.reason[KARMA_TEAMHURT])
@@ -401,14 +414,22 @@ end
 -- Handle karma change due to one player killing another.
 -- @param Player attacker
 -- @param Player victim
--- @param DamageInfo dmginfo
+-- @param CTakeDamageInfo dmginfo
 -- @realm server
 function KARMA.Killed(attacker, victim, dmginfo)
-	if attacker == victim or not IsValid(attacker) or not IsValid(victim) or not victim:IsPlayer() or not attacker:IsPlayer() then return end
+	if attacker == victim
+		or not IsValid(attacker)
+		or not IsValid(victim)
+		or not victim:IsPlayer()
+		or not attacker:IsPlayer()
+	then return end
 
-	if not attacker:IsInTeam(victim) then -- team kills another team
-		if attacker:GetSubRoleData().unknownTeam then
-			local reward = KARMA.GetKillReward()
+	local attackerRoleData = attacker:GetSubRoleData()
+
+	-- team kills another team
+	if not attacker:IsInTeam(victim) then
+		if attackerRoleData.unknownTeam then
+			local reward = KARMA.GetKillReward() * attackerRoleData.karma.enemyKillBonusMultiplier
 
 			reward = KARMA.GiveReward(attacker, reward, KARMA.reason[KARMA_ENEMYKILL])
 
@@ -417,7 +438,7 @@ function KARMA.Killed(attacker, victim, dmginfo)
 	else -- team kills own team
 		if not victim:GetCleanRound() then return end
 
-		local multiplicator = WasAvoidable(attacker, victim, dmginfo)
+		local multiplicator = WasAvoidable(attacker, victim, dmginfo) * attackerRoleData.karma.teamKillPenaltyMultiplier
 		local penalty = KARMA.GetKillPenalty(victim:GetLiveKarma()) * multiplicator
 
 		KARMA.GivePenalty(attacker, penalty, victim, KARMA.reason[KARMA_TEAMKILL])
@@ -475,10 +496,6 @@ function KARMA.RoundIncrement()
 			if ply:GetCleanRound() then
 				KARMA.GiveReward(ply, cleanbonus, KARMA.reason[KARMA_CLEAN])
 			end
-
-			if IsDebug() then
-				print(ply, "gets roundincr ", incr)
-			end
 		end
 	end
 
@@ -529,44 +546,63 @@ function KARMA.NotifyPlayer(ply)
 end
 
 ---
--- These generic fns will be called at round end and start, so that stuff can
--- easily be moved to a different phase
+-- Runs the karma related functions on round end.
 -- @realm server
 function KARMA.RoundEnd()
-	if KARMA.IsEnabled() then
-		KARMA.RoundIncrement()
+	if not KARMA.IsEnabled() then return end
 
-		-- if karma trend needs to be shown in round report, may want to delay
-		-- rebase until start of next round
-		KARMA.Rebase()
-		KARMA.RememberAll()
+	KARMA.RoundIncrement()
 
-		if config.autokick:GetBool() then
-			local plys = player.GetAll()
+	-- if karma trend needs to be shown in round report, may want to delay
+	-- rebase until start of next round
+	KARMA.Rebase()
+	KARMA.RememberAll()
 
-			for i = 1, #plys do
-				KARMA.CheckAutoKick(plys[i])
-			end
-		end
+	-- check if players should be kicked due to low karma
+	KARMA.CheckAutoKickAll()
+end
+
+---
+-- Runs the karma related functions on round begin.
+-- @realm server
+function KARMA.RoundBegin()
+	if not KARMA.IsEnabled() then return end
+
+	-- Check for low-karma players that weren't banned on round end
+	-- because they disconnected before the round ended.
+	KARMA.CheckAutoKickAll()
+end
+
+---
+-- Update / Reset the KARMA System after the previous round ended in prepare round.
+-- @realm server
+function KARMA.RoundPrepare()
+	KARMA.InitState()
+	KARMA.ResetRoundChanges()
+
+	if not KARMA.IsEnabled() then return end
+
+	local plys = player.GetAll()
+
+	for i = 1, #plys do
+		local ply = plys[i]
+
+		KARMA.ApplyKarma(ply)
+		KARMA.NotifyPlayer(ply)
 	end
 end
 
 ---
--- Update / Reset the KARMA System if the round begins
+-- Checks if there is a player that should be kicked due to low karma.
+-- Usually called in @{GM:TTTBeginRound} and @{GM:TTTEndRound}.
 -- @realm server
-function KARMA.RoundBegin()
-	KARMA.InitState()
-	KARMA.ResetRoundChanges()
+function KARMA.CheckAutoKickAll()
+	if not config.autokick:GetBool() then return end
 
-	if KARMA.IsEnabled() then
-		local plys = player.GetAll()
+	local plys = player.GetAll()
 
-		for i = 1, #plys do
-			local ply = plys[i]
-
-			KARMA.ApplyKarma(ply)
-			KARMA.NotifyPlayer(ply)
-		end
+	for i = 1, #plys do
+		KARMA.CheckAutoKick(plys[i])
 	end
 end
 
@@ -701,4 +737,42 @@ function KARMA.PrintAll(printfn)
 			ply:GetDamageFactor() * 100
 		))
 	end
+end
+
+---
+-- A cancelable hook to prevent the penalty given to a player if they
+-- attack some victim.
+-- @param Player attacker The player who attacked someone and should receive a penalty
+-- @param number penalty The size of the penalty
+-- @param Player victim The player that was attacked
+-- @return nil|boolean Return true to block the given penalty
+-- @hook
+-- @realm server
+function GM:TTTKarmaGivePenalty(attacker, penalty, victim)
+
+end
+
+---
+-- Modify the karma penalty multiplier.
+-- @param Player attacker The player who attacked someone and should receive a penalty
+-- @param Player victim The player that was attacked
+-- @param CTakeDamageInfo dmginfo The damage info from the attack
+-- @return nil|number Return the karma multiplier
+-- @hook
+-- @realm server
+function GM:TTT2KarmaPenaltyMultiplier(attacker, victim, dmginfo)
+
+end
+
+---
+-- Called when a player is about to be kicked/banned because their karma has gone below
+-- the the autokick/ban level specified in the server's configuration.
+-- @note Karma is checked at the end of a round, so if their karma continues to be low,
+-- this hook will be called after every round.
+-- @param Player ply The player who is about to be kicked
+-- @return nil|boolean Return false to prevent the player from being kicked
+-- @hook
+-- @realm server
+function GM:TTTKarmaLow(ply)
+
 end

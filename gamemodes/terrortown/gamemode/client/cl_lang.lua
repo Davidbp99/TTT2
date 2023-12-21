@@ -133,6 +133,29 @@ function LANG.GetParamTranslation(name, params)
 end
 
 ---
+-- Translates a given string and automatically decides between param translation and normal
+-- translation based on the given data. Can also translate the params if so desired.
+-- @param string name string key identifier for the translated @{string}
+-- @param[opt] table params The params that can be insterted into the translated string
+-- @param[opt] boolean translateParams Whether the params should be translated as well
+-- @return string The translated string
+-- @realm client
+function LANG.GetDynamicTranslation(name, params, translateParams)
+	-- process params (translation)
+	if params and translateParams then
+		for k, v in pairs(params) do
+			params[k] = LANG.TryTranslation(v)
+		end
+	end
+
+	if params then
+		return LANG.GetParamTranslation(name, params)
+	else
+		return LANG.TryTranslation(name)
+	end
+end
+
+---
 -- Returns the translated @{string} text (if available).<br />String
 -- <a href="http://lua-users.org/wiki/StringInterpolation">interpolation</a> is allowed<br />
 -- Parameterised version, performs string interpolation. Slower than
@@ -525,38 +548,12 @@ function LANG.GetActiveLanguageName()
 	return cv_ttt_language:GetString()
 end
 
--- Message style declarations
+---
+-- This hook is called after the language was changed.
+-- @param string oldLang The name of the old language
+-- @param string newLang The name of the new language
+-- @hook
+-- @realm client
+function GM:TTTLanguageChanged(oldLang, newLang)
 
--- Rather than having a big list of LANG.SetStyle calls, we specify it the other
--- way around here and churn through it in code. This is convenient because
--- we're doing it en-masse for some random interface things spread out over the
--- place.
---
--- Styles of custom SWEP messages and such should use LANG.SetStyle in their
--- script. The SWEP stuff here might be moved out to the SWEPS too.
-
--- TODO the remaining messages here are moved to their fitting ents as soon as
--- we move them all into our main repo
-
-local styledmessages = {
-	rolecolour = { -- TODO move to teleporter
-		"tele_failed",
-		"tele_no_mark",
-		"tele_marked"
-	},
-
-	chat_warn = { -- TODO move to teleporter
-		"tele_no_ground",
-		"tele_no_crouch",
-		"tele_no_mark_ground",
-		"tele_no_mark_crouch"
-	}
-}
-
-local set_style = LANG.SetStyle
-
-for style, msgs in pairs(styledmessages) do
-	for _, name in pairs(msgs) do
-		set_style(name, style)
-	end
 end

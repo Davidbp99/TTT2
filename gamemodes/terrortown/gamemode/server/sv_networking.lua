@@ -39,25 +39,25 @@ function SendRoleListMessage(subrole, team, sids, ply_or_rf)
 			local eidx = sids[i]
 			local p = Entity(eidx)
 
-			if not TTT2NETTABLE[ply][p] or TTT2NETTABLE[ply][p][1] ~= subrole or TTT2NETTABLE[ply][p][2] ~= team then
-				TTT2NETTABLE[ply][p] = {subrole, team}
+			if TTT2NETTABLE[ply][p] and TTT2NETTABLE[ply][p][1] == subrole and TTT2NETTABLE[ply][p][2] == team then continue end
 
-				if p ~= ply then
-					local rs = GetRoundState()
+			TTT2NETTABLE[ply][p] = {subrole, team}
 
-					if p:GetSubRoleData().disableSync
+			if p ~= ply then
+				local rs = GetRoundState()
+
+				if p:GetSubRoleData().disableSync
 					and rs == ROUND_ACTIVE
 					-- TODO this has to be reworked
 					and not p:RoleKnown()
 					---
 					-- @realm server
 					and not hook.Run("TTT2OverrideDisabledSync", ply, p)
-					then continue end
+				then continue end
 
-					adds[#adds + 1] = eidx
-				else
-					localPly = true
-				end
+				adds[#adds + 1] = eidx
+			else
+				localPly = true
 			end
 		end
 
@@ -210,68 +210,69 @@ function SendFullStateUpdate()
 	local plyCount = #players
 
 	for i = 1, plyCount do
-		local ply = players[i]
+		local plySyncTo = players[i]
 		local tmp = {}
-		local team = ply:GetTeam()
-		local roleData = ply:GetSubRoleData()
+		local teamSyncTo = plySyncTo:GetTeam()
+		local roleDataSyncTo = plySyncTo:GetSubRoleData()
 
 		for k = 1, plyCount do
-			local v = players[k]
-			local rd = v:GetSubRoleData()
+			local plySyncFrom = players[k]
+			local roleDataSyncFrom = plySyncFrom:GetSubRoleData()
+			local teamSyncFrom = plySyncFrom:GetTeam()
 
-			if not roleData.unknownTeam and v:GetTeam() == team
-				or v:RoleKnown() -- TODO rework
-				or table.HasValue(rd.visibleForTeam, ply:GetTeam())
-				or roleData.networkRoles and table.HasValue(roleData.networkRoles, rd)
-				or v:GetBaseRole() == ROLE_DETECTIVE
-				or ply == v
+			if not roleDataSyncTo.unknownTeam and teamSyncFrom == teamSyncTo
+				or plySyncFrom:RoleKnown() -- TODO rework
+				or table.HasValue(roleDataSyncFrom.visibleForTeam, teamSyncTo)
+				or table.HasValue(roleDataSyncTo.networkRoles, roleDataSyncFrom)
+				or roleDataSyncFrom.isPublicRole
+				or plySyncTo == plySyncFrom
 			then
-				tmp[v] = {v:GetSubRole() or ROLE_NONE, v:GetTeam() or TEAM_NONE}
+				tmp[plySyncFrom] = {plySyncFrom:GetSubRole() or ROLE_NONE, teamSyncFrom or TEAM_NONE}
 			else
-				tmp[v] = {ROLE_NONE, TEAM_NONE}
+				tmp[plySyncFrom] = {ROLE_NONE, TEAM_NONE}
 			end
 		end
 
 		---
 		-- maybe some networking for custom roles or role hacking
 		-- @realm server
-		hook.Run("TTT2SpecialRoleSyncing", ply, tmp)
+		hook.Run("TTT2SpecialRoleSyncing", plySyncTo, tmp)
 
-		syncTbl[ply] = {}
+		syncTbl[plySyncTo] = {}
 
-		TTT2NETTABLE[ply] = TTT2NETTABLE[ply] or {}
+		TTT2NETTABLE[plySyncTo] = TTT2NETTABLE[plySyncTo] or {}
 
 		for p, t in pairs(tmp) do
-			if p ~= ply then
-				syncTbl[ply][t[2]] = syncTbl[ply][t[2]] or {}
-				syncTbl[ply][t[2]][t[1]] = syncTbl[ply][t[2]][t[1]] or {}
-				syncTbl[ply][t[2]][t[1]][#syncTbl[ply][t[2]][t[1]] + 1] = p:EntIndex()
-			elseif not TTT2NETTABLE[ply][p] or TTT2NETTABLE[ply][p][1] ~= t[1] or TTT2NETTABLE[ply][p][2] ~= t[2] then
+			if p ~= plySyncTo then
+				syncTbl[plySyncTo][t[2]] = syncTbl[plySyncTo][t[2]] or {}
+				syncTbl[plySyncTo][t[2]][t[1]] = syncTbl[plySyncTo][t[2]][t[1]] or {}
+				syncTbl[plySyncTo][t[2]][t[1]][#syncTbl[plySyncTo][t[2]][t[1]] + 1] = p:EntIndex()
+			elseif not TTT2NETTABLE[plySyncTo][p] or TTT2NETTABLE[plySyncTo][p][1] ~= t[1] or TTT2NETTABLE[plySyncTo][p][2] ~= t[2] then
 				localPly = true
 			end
 		end
 
-		for tm, t in pairs(syncTbl[ply]) do
+		for tm, t in pairs(syncTbl[plySyncTo]) do
 			for sr, sids in pairs(t) do
-				SendRoleListMessage(sr, tm, sids, ply)
+				SendRoleListMessage(sr, tm, sids, plySyncTo)
 			end
 		end
 
 		-- update own subrole for ply
 		if localPly then
-			TTT2NETTABLE[ply][ply] = {tmp[ply][1], tmp[ply][2]}
+			TTT2NETTABLE[plySyncTo][plySyncTo] = {tmp[plySyncTo][1], tmp[plySyncTo][2]}
 
 			net.Start("TTT_Role")
-			net.WriteUInt(tmp[ply][1], ROLE_BITS)
-			net.WriteString(tmp[ply][2])
-			net.Send(ply)
+			net.WriteUInt(tmp[plySyncTo][1], ROLE_BITS)
+			net.WriteString(tmp[plySyncTo][2])
+			net.Send(plySyncTo)
 		end
 	end
 end
 
 ---
 -- Resynces the list of @{Player}s for a given list of @{Player}s
--- @param nil|Player|table
+-- @param nil|Player|table ply_or_rf
 -- @realm server
 function SendRoleReset(ply_or_rf)
 	local players = player.GetAll()
@@ -299,66 +300,66 @@ function SendRoleReset(ply_or_rf)
 end
 
 -- Console commands
-local function ttt_request_rolelist(ply)
+local function ttt_request_rolelist(plySyncTo)
 	-- Client requested a state update. Note that the client can only use this
 	-- information after entities have been initialized (e.g. in InitPostEntity).
 	if GetRoundState() ~= ROUND_WAIT then
 		local localPly = false
 		local tmp = {}
-		local team = ply:GetTeam()
-		local roleData = ply:GetSubRoleData()
+		local team = plySyncTo:GetTeam()
+		local roleDataSyncTo = plySyncTo:GetSubRoleData()
 		local plys = player.GetAll()
 
 		for i = 1, #plys do
-			local v = plys[i]
-			local rd = v:GetSubRoleData()
+			local plySyncFrom = plys[i]
+			local roleDataSyncFrom = plySyncFrom:GetSubRoleData()
 
-			if not ply:GetSubRoleData().unknownTeam and v:GetTeam() == team
-				or v:RoleKnown() -- TODO rework
-				or table.HasValue(rd.visibleForTeam, ply:GetTeam())
-				or roleData.networkRoles and table.HasValue(roleData.networkRoles, rd)
-				or v:GetBaseRole() == ROLE_DETECTIVE
-				or ply == v
+			if not roleDataSyncTo.unknownTeam and plySyncFrom:GetTeam() == team
+				or plySyncFrom:RoleKnown() -- TODO rework
+				or table.HasValue(roleDataSyncFrom.visibleForTeam, plySyncTo:GetTeam())
+				or table.HasValue(roleDataSyncTo.networkRoles, roleDataSyncFrom)
+				or roleDataSyncFrom.isPublicRole
+				or plySyncTo == plySyncFrom
 			then
-				tmp[v] = {v:GetSubRole(), v:GetTeam()}
+				tmp[plySyncFrom] = {plySyncFrom:GetSubRole() or ROLE_NONE, plySyncFrom:GetTeam() or TEAM_NONE}
 			else
-				tmp[v] = {ROLE_NONE, TEAM_NONE}
+				tmp[plySyncFrom] = {ROLE_NONE, TEAM_NONE}
 			end
 		end
 
 		---
 		-- maybe some networking for custom roles or role hacking
 		-- @realm server
-		hook.Run("TTT2SpecialRoleSyncing", ply, tmp)
+		hook.Run("TTT2SpecialRoleSyncing", plySyncTo, tmp)
 
 		local tbl = {}
 
-		TTT2NETTABLE[ply] = TTT2NETTABLE[ply] or {}
+		TTT2NETTABLE[plySyncTo] = TTT2NETTABLE[plySyncTo] or {}
 
 		for p, t in pairs(tmp) do
-			if p ~= ply then
+			if p ~= plySyncTo then
 				tbl[t[2]] = tbl[t[2]] or {}
 				tbl[t[2]][t[1]] = tbl[t[2]][t[1]] or {}
 				tbl[t[2]][t[1]][#tbl[t[2]][t[1]] + 1] = p:EntIndex()
-			elseif not TTT2NETTABLE[ply][p] or TTT2NETTABLE[ply][p][1] ~= t[1] or TTT2NETTABLE[ply][p][2] ~= t[2] then
+			elseif not TTT2NETTABLE[plySyncTo][p] or TTT2NETTABLE[plySyncTo][p][1] ~= t[1] or TTT2NETTABLE[plySyncTo][p][2] ~= t[2] then
 				localPly = true
 			end
 		end
 
 		for tm, t in pairs(tbl) do
 			for sr, sids in pairs(t) do
-				SendRoleListMessage(sr, tm, sids, ply)
+				SendRoleListMessage(sr, tm, sids, plySyncTo)
 			end
 		end
 
 		-- update own subrole for ply
 		if localPly then
-			TTT2NETTABLE[ply][ply] = {tmp[ply][1], tmp[ply][2]}
+			TTT2NETTABLE[plySyncTo][plySyncTo] = {tmp[plySyncTo][1], tmp[plySyncTo][2]}
 
 			net.Start("TTT_Role")
-			net.WriteUInt(tmp[ply][1], ROLE_BITS)
-			net.WriteString(tmp[ply][2])
-			net.Send(ply)
+			net.WriteUInt(tmp[plySyncTo][1], ROLE_BITS)
+			net.WriteString(tmp[plySyncTo][2])
+			net.Send(plySyncTo)
 		end
 	end
 end
@@ -482,3 +483,24 @@ local function ttt_roles_index(ply)
 	ply:ChatPrint("----------------")
 end
 concommand.Add("ttt_roles_index", ttt_roles_index)
+
+---
+-- @param Player ply
+-- @param Player p
+-- @hook
+-- @realm server
+function GM:TTT2OverrideDisabledSync(ply, p)
+
+end
+
+---
+-- Hook that is called in @{SendFullStateUpdate} that can be used
+-- to sync the roles info to custom defined teams as well.
+-- @param Player ply The player whose info might be broadcasted
+-- @param table syncTeamTbl The table with the already defined receipients
+-- of their role info; can be modified
+-- @hook
+-- @realm server
+function GM:TTT2SpecialRoleSyncing(ply, syncTeamTbl)
+
+end
